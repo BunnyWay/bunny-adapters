@@ -30,6 +30,7 @@
     "release": "npm run build && changeset publish"
   },
   "devDependencies": {
+    "@changesets/changelog-github": "^1.0.0",
     "@changesets/cli": "^2.29.0",
     "prettier": "^3.6.0"
   }
