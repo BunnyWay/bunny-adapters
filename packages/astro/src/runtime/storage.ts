@@ -16,6 +16,12 @@ export interface StorageConfig {
   host: string;
   /** Zone password. Read-only is enough to serve a site. */
   key: string;
+  /**
+   * Folder inside the zone that holds these objects, for example
+   * `deploys/a1b2c3d4`. Every path this client reads or writes goes under it.
+   * Empty means the zone root.
+   */
+  prefix?: string;
 }
 
 export interface StorageClient {
@@ -38,10 +44,12 @@ export interface StorageClient {
 export function createStorage(config: StorageConfig): StorageClient {
   const base = config.zone ? `${storageBase(config.host)}/${config.zone}` : "";
   const headers = config.key ? { AccessKey: config.key } : undefined;
+  const prefix = (config.prefix ?? "").replace(/^\/+|\/+$/g, "");
 
   /** The URL for one object. Every caller goes through this, so nothing skips
-   * the encoding that keeps a request inside the zone. */
-  const urlFor = (object: string): string => `${base}/${encodeObjectPath(object)}`;
+   * the prefix, or the encoding that keeps a request inside the zone. */
+  const urlFor = (object: string): string =>
+    `${base}/${encodeObjectPath(prefix ? `${prefix}/${object}` : object)}`;
 
   // A refused zone breaks every request, so the cause is worth one line. Say it
   // once per isolate; repeating it on every request would bury the rest of the

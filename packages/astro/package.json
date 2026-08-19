@@ -55,9 +55,6 @@
     },
     "./package.json": "./package.json"
   },
-  "bin": {
-    "bunny-astro": "./dist/bin/cli.js"
-  },
   "files": [
     "dist",
     "README.md",

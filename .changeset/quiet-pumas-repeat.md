@@ -17,11 +17,11 @@ asks Storage at all.
 Keep a preview session out of the folder you publish. `astro preview` gave the
 script one local zone for assets and for sessions, and that zone served
 `dist/client`. Every session written while previewing landed in the folder
-`bunny-astro upload` sends to the public asset zone. Sessions now get a zone of
+a deploy sends to the public asset zone. Sessions now get a zone of
 their own, over `dist/.preview-sessions`.
 
 Refuse a `--concurrency` that cannot upload. `Number("eight")` is `NaN`, and a
-`NaN` worker count built an empty pool. `bunny-astro upload` then sent nothing,
+`NaN` worker count built an empty pool. The upload then sent nothing,
 printed `Upload complete.`, and exited 0. `deploy` uploads before it deploys, so
 a typo shipped a new script against the previous build's assets. The command now
 stops on any value that is not a whole number of 1 or more.

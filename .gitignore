@@ -16,3 +16,6 @@ tests/.tmp/
 # Build output of the test fixtures.
 tests/fixtures/*/dist/
 tests/fixtures/*/.astro/
+
+# The build manifest `bunny deploy` reads. A build output, like dist/.
+.bunny/

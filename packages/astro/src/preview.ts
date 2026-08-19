@@ -91,9 +91,9 @@ const createPreviewServer: CreatePreviewServer = async ({
   // Sessions get a zone of their own, over a folder outside the client build.
   //
   // Sharing one zone would write every session into `dist/client`, which is the
-  // folder `bunny-astro upload` publishes. A developer who previewed and then
-  // deployed without rebuilding would put their local sessions in the public
-  // asset zone, where the script serves them like any other object.
+  // folder a deploy uploads. A developer who previewed and then deployed without
+  // rebuilding would put their local sessions in the public asset zone, where the
+  // script serves them like any other object.
   const sessions = await startLocalZone({
     dir: fileURLToPath(new URL(SESSION_DIR, outDir)),
     zone: "preview-sessions",

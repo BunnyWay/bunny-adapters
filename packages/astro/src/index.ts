@@ -2,11 +2,13 @@
  * The Astro integration. Everything here runs while the site builds, and none
  * of it reaches the deployed script.
  */
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AstroIntegration, RouteToHeaders } from "astro";
 import { SIZE_LIMIT, bundleServer, formatSize, relativeTo, NODE_BUILTINS } from "./build/bundle.js";
+import { MANIFEST_VERSION, writeBuildManifest } from "./build/deploy-manifest.js";
 import { buildManifest } from "./build/manifest.js";
 import { normalizeBase } from "./runtime/paths.js";
 import type { RuntimeOptions } from "./runtime/types.js";
@@ -25,6 +27,18 @@ const PACKAGE = "@bunny.net/astro-adapter";
 
 /** Above this many client files, the manifest costs more than it saves. */
 const DEFAULT_MANIFEST_LIMIT = 20_000;
+
+const require = createRequire(import.meta.url);
+
+/** A package's version, or undefined when it cannot be read. Never throws: this is only for a label. */
+function versionOf(specifier: string, from?: string): string | undefined {
+  try {
+    const resolver = from ? createRequire(from) : require;
+    return (resolver(specifier) as { version?: string }).version;
+  } catch {
+    return undefined;
+  }
+}
 
 export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegration {
   const {
@@ -64,6 +78,8 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
   let serverEntry = "entry.mjs";
   let outDir: URL;
   let routeToHeaders: RouteToHeaders | null = null;
+  let astroVersion: string | undefined;
+  let staticOnly = false;
 
   return {
     name: PACKAGE,
@@ -125,6 +141,8 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
         }
         root = config.root;
         outDir = config.outDir;
+        staticOnly = config.output === "static";
+        astroVersion = versionOf("astro/package.json", fileURLToPath(new URL("./", config.root)));
         clientDir = config.build.client;
         serverDir = config.build.server;
         serverEntry = config.build.serverEntry ?? "entry.mjs";
@@ -240,7 +258,75 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
           const count = new Set(Object.values(manifest.redirects)).size;
           logger.info(`Answering ${count} prerendered redirect(s) in the script.`);
         }
-        logger.info(`Deploy it with: npx bunny-astro deploy`);
+
+        // What `bunny deploy` reads. The CLI knows no framework, so everything
+        // it needs about this build has to be in here.
+        const manifestFile = await writeBuildManifest(rootDir, {
+          manifestVersion: MANIFEST_VERSION,
+          adapter: { package: PACKAGE, version: versionOf("../package.json") },
+          framework: { name: "astro", version: astroVersion },
+          kind: staticOnly ? "static" : "ssr",
+          script: {
+            entry: relative,
+            type: "standalone",
+            bytes,
+          },
+          assets: { dir: relativeTo(rootDir, fileURLToPath(clientDir)) },
+          requires: {
+            // No `cliVersion` floor yet. `manifestVersion` already stops a CLI
+            // that cannot read this shape, and a CLI without `bunny deploy` has
+            // no command to run. Set a floor here once a released CLI version
+            // needs to be ruled out.
+            pullZone: {
+              // `Astro.cookies.set()` reaches nobody while the pull zone strips
+              // Set-Cookie, and nothing in the zone says why.
+              disableCookies: false,
+              // Smart Cache caches known static extensions only, so it never
+              // caches a page, and a `routeRules` entry does nothing while it is
+              // on. The adapter protects a private page another way: a server
+              // response that sets no Cache-Control gets `private, no-store`.
+              enableSmartCache: false,
+            },
+            ...(sessions ? { storage: { write: true, reason: "Astro.session" } } : {}),
+            env: [
+              { name: "BUNNY_STORAGE_ZONE", reason: "the zone holding the client build" },
+              { name: "BUNNY_STORAGE_HOST", reason: "that zone's regional endpoint" },
+              {
+                name: "BUNNY_STORAGE_KEY",
+                reason: "that zone's read-only password",
+                secret: true,
+              },
+              ...(sessions
+                ? [
+                    { name: "BUNNY_SESSION_ZONE", reason: "Astro.session", optional: true },
+                    {
+                      name: "BUNNY_SESSION_KEY",
+                      reason: "Astro.session, a password that can write",
+                      secret: true,
+                      optional: true,
+                    },
+                  ]
+                : []),
+              ...(cache
+                ? [
+                    {
+                      name: "BUNNY_PULLZONE_ID",
+                      reason: "Astro.cache.invalidate()",
+                      optional: true,
+                    },
+                    {
+                      name: "BUNNY_API_KEY",
+                      reason: "Astro.cache.invalidate()",
+                      secret: true,
+                      optional: true,
+                    },
+                  ]
+                : []),
+            ],
+          },
+          dev: { command: "astro dev", preview: "astro preview" },
+        });
+        logger.info(`Wrote ${manifestFile}. Deploy it with: bunny deploy`);
       },
     },
   };

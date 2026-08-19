@@ -43,51 +43,70 @@ export default defineConfig({
 ## Deploy
 
 ```bash
-npm run build
-npx bunny-astro deploy
+bunny deploy
 ```
 
-`deploy` uploads `dist/client` and then deploys `dist/index.js`, in that order.
-Both have to happen every time: Astro renames its CSS and JS bundles whenever
-they change, so deploying only the script leaves the new names missing from
-storage and the site loses its styles.
+That is the whole thing. The [bunny CLI](https://bunny.net/docs/cli) builds the
+site, creates what it needs the first time, uploads the build, and publishes the
+script:
 
-<details>
-<summary>The two steps by hand</summary>
+- a storage zone for the build's files and the site's sessions,
+- an Edge Script for Astro's server, with the pull zone that gives the site its
+  URL,
+- every variable the script reads, set from what the CLI already knows. No
+  password passes through your terminal.
+
+Each deploy goes to its own folder in the zone, and the build writes
+`.bunny/build.json` so the CLI knows what to send where. So a rollback restores a
+page and the assets it names together:
 
 ```bash
-BUNNY_STORAGE_ZONE=my-site-assets \
-BUNNY_STORAGE_KEY=<write password> \
-npx bunny-astro upload
-
-bunny scripts deploy dist/index.js
+bunny deploy            # build and publish
+bunny rollback          # back to the deploy that was live before
+bunny sites deployments list
 ```
+
+The CLI also applies the pull zone settings this adapter asks for, and says which
+ones it changed: cookies pass through, and Smart Cache goes off so the adapter's
+own cache headers count.
+
+<details>
+<summary>Deploying by hand</summary>
+
+Nothing stops you. Upload `dist/client` to a storage zone, deploy `dist/index.js`
+with `bunny scripts deploy`, and set the variables in the next section yourself.
+Both halves have to go out together: Astro renames its CSS and JavaScript
+bundles whenever they change, so a script deployed against last build's files
+loses its styles.
+
+Set `BUNNY_ASSET_PREFIX` when the files are in a folder rather than at the zone
+root. `bunny deploy` sets it for you, in the bundle itself.
 
 </details>
 
 ## Configure the script
 
-The adapter reads its settings from the script environment, so no password is
-ever baked into the bundle.
+`bunny deploy` sets all of these. The table is here for a deploy you run
+yourself, and for reading a script's settings in the dashboard.
 
 | Variable             | Purpose                                                          |
 | -------------------- | ---------------------------------------------------------------- |
 | `BUNNY_STORAGE_ZONE` | The zone holding `dist/client`                                   |
 | `BUNNY_STORAGE_HOST` | The zone's regional endpoint. Defaults to `storage.bunnycdn.com` |
 | `BUNNY_STORAGE_KEY`  | The zone's **read-only** password                                |
+| `BUNNY_ASSET_PREFIX` | The folder inside the zone that holds this deploy                |
 | `BUNNY_SESSION_ZONE` | Only for sessions. A zone the script may write to                |
 | `BUNNY_SESSION_KEY`  | Only for sessions. That zone's **write** password                |
 | `BUNNY_API_KEY`      | Only for cache purging                                           |
 | `BUNNY_PULLZONE_ID`  | Only for cache purging                                           |
 
-```bash
-bunny scripts env set BUNNY_STORAGE_ZONE my-site-assets
-bunny scripts env set BUNNY_STORAGE_HOST storage.bunnycdn.com
-bunny scripts env set BUNNY_STORAGE_KEY <read-only password> --secret
-```
+The script only reads the asset zone, so it gets the read-only password, never
+the one that can write or delete. No password is ever an adapter option: it
+would end up in the bundle.
 
-The script only reads the asset zone, so give it the read-only password, never
-the one that can write or delete.
+```bash
+bunny scripts env set BUNNY_API_KEY <key> --secret
+```
 
 ## Local development
 
@@ -199,10 +218,14 @@ the object again.
 `Astro.session` works out of the box. Each session is one object in a Bunny
 Storage zone, so every edge node reads the same value.
 
-Give the script a zone it may write to, and keep the asset zone read-only:
+`bunny deploy` sets this up: sessions go under `_sessions/` in the site's own
+storage zone, which nothing serves, and only the session driver gets the
+password that can write.
+
+For a deploy you run yourself, give the script a zone it may write to, and keep
+the asset zone read-only:
 
 ```bash
-bunny api POST /storagezone --body '{"Name":"my-site-sessions","Region":"DE"}'
 bunny scripts env set BUNNY_SESSION_ZONE my-site-sessions
 bunny scripts env set BUNNY_SESSION_KEY <write password> --secret
 ```
@@ -242,8 +265,9 @@ await Astro.cache.invalidate({ path: "/products/socks" });
 ```
 
 That calls the [purge API](https://bunny.net/docs/cdn/purge-cache), so the
-script needs `BUNNY_API_KEY` and `BUNNY_PULLZONE_ID`. Pass `cache: false` to
-configure your own provider.
+script needs `BUNNY_API_KEY` and `BUNNY_PULLZONE_ID`. The CLI sets the pull zone
+id, and asks before it puts an account API key on a script. Pass `cache: false`
+to configure your own provider.
 
 ### Turn Smart Cache off first
 
@@ -252,12 +276,15 @@ file extensions, and HTML is not one of them. It is on by default, and while it
 is on a `routeRules` entry has no effect: the page is rendered again for every
 request.
 
+`bunny deploy` turns it off, because the build manifest asks for that. For a
+deploy you run yourself:
+
 ```bash
 bunny api POST /pullzone/<pull-zone-id> --body '{"EnableSmartCache": false}'
 ```
 
 Smart Cache exists to stop a misconfigured origin caching a personal page by
-accident, so read the next section before you switch it off.
+accident. The adapter covers that another way: see the next section.
 
 ### Why a dynamic page says no-store
 
@@ -316,14 +343,14 @@ What does not work is a package with a native binary. `sharp` is the usual one.
 ## Cookies
 
 A pull zone created for a script has **Disable cookies** switched on, which
-strips `Set-Cookie` from every response. Turn it off before
-`Astro.cookies.set()` will reach the browser:
+strips `Set-Cookie` from every response. The build manifest asks for it to be
+off, so `bunny deploy` turns it off and reports the change.
+
+For a deploy you run yourself:
 
 ```bash
 bunny api POST /pullzone/<pull-zone-id> --body '{"DisableCookies": false}'
 ```
-
-`bunny scripts show <script-id>` prints the linked pull zone and its id.
 
 ## Options
 
@@ -368,25 +395,30 @@ Above 20 000 files the list would cost more space than it saves, and the script
 goes back to asking Storage. Pass a number to move that line, or `false` to
 switch it off.
 
-## The command line
+## The build manifest
 
+The build writes `.bunny/build.json`, which is how `bunny deploy` knows what to
+deploy without knowing anything about Astro:
+
+```jsonc
+{
+  "manifestVersion": 1,
+  "adapter": { "package": "@bunny.net/astro-adapter", "version": "0.1.0" },
+  "framework": { "name": "astro", "version": "7.2.4" },
+  "kind": "ssr",
+  "script": { "entry": "dist/index.js", "type": "standalone", "bytes": 668140 },
+  "assets": { "dir": "dist/client" },
+  "requires": {
+    "pullZone": { "disableCookies": false, "enableSmartCache": false },
+    "storage": { "write": true, "reason": "Astro.session" },
+    "env": [{ "name": "BUNNY_STORAGE_ZONE", "reason": "the zone holding the client build" }],
+  },
+}
 ```
-bunny-astro deploy    Upload the client build, then deploy the script
-bunny-astro upload    Upload the client build only
 
-  --dir <path>       Folder to upload            (default: dist/client)
-  --zone <name>      Storage zone name           (env: BUNNY_STORAGE_ZONE)
-  --host <hostname>  Storage endpoint            (env: BUNNY_STORAGE_HOST)
-  --key <password>   Storage write password      (env: BUNNY_STORAGE_KEY)
-  --script <id>      Edge Script to deploy to    (default: the linked one)
-  --outfile <path>   Bundle to deploy            (default: from the build)
-  --concurrency <n>  Parallel uploads            (default: 8)
-  --delete-stale     Remove objects the build no longer produces
-  --dry-run          List what would happen, and change nothing
-```
-
-`--delete-stale` is worth running now and then. Astro hashes its asset names, so
-every build leaves the previous ones in the zone.
+It is a build output, so keep it out of version control.
+[`docs/writing-an-adapter.md`](../../docs/writing-an-adapter.md) holds the
+contract for the next adapter.
 
 ## Limits
 
@@ -407,10 +439,8 @@ page instead, and the adapter serves your prerendered 404 page out of Storage.
 An endpoint in `src/pages/api/` keeps its own 404, so a JSON client is never
 handed a web page.
 
-**Prerendered pages 404.** Upload `dist/client` again. Run
-`bunny-astro deploy`, which never leaves the two halves out of step.
-
-**Assets 404 but pages render.** Upload from `dist/client`, not `dist`.
+**Prerendered pages 404.** The files and the script are out of step. Run
+`bunny deploy`, which sends both, and `bunny rollback` while you look.
 
 **A POST returns 403.** Astro checks the request origin for server output. This
 is Astro's CSRF protection. Adjust `security.checkOrigin` if you need to.

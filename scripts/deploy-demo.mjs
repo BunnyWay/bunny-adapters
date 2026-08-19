@@ -15,9 +15,7 @@
  *
  * It needs the bunny CLI, an authenticated profile, and:
  *
- *   BUNNY_SCRIPT          the Edge Script name or id
- *   BUNNY_STORAGE_ZONE    the zone that holds dist/client
- *   BUNNY_STORAGE_KEY     that zone's write password
+ *   BUNNY_SCRIPT          the site name `bunny deploy` uses
  *   BUNNY_SITE_URL        the site's URL, for --verify
  *
  * Put them in a `.env` beside this repository's root; it is ignored by git.
@@ -62,14 +60,12 @@ const deploy = !process.argv.includes("--verify-only");
 
 if (deploy) {
   const script = fromEnv("BUNNY_SCRIPT");
-  fromEnv("BUNNY_STORAGE_ZONE");
-  fromEnv("BUNNY_STORAGE_KEY");
 
   console.log("building the showcase\n");
   run("npm", ["run", "build"], { cwd: showcase });
 
   console.log("\nuploading the client build and deploying the script\n");
-  run("npx", ["bunny-astro", "deploy", "--delete-stale", "--script", script], { cwd: showcase });
+  run("bunny", ["deploy", "--name", script], { cwd: showcase });
 }
 
 if (verify) {

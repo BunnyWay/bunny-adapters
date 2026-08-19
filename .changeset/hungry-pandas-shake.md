@@ -28,9 +28,10 @@ Added:
   address, `waitUntil`, `caches`, and `env`.
 - **Static page headers.** Headers Astro emits for a prerendered page, such as
   a content security policy, are applied when the script serves it.
-- **`bunny-astro deploy`.** One command uploads the client build and then
-  deploys the script, so the two halves never fall out of step. `upload` gains
-  `--delete-stale`.
+- **One-command deploys.** The build writes `.bunny/build.json`, and
+  `bunny deploy` reads it: it creates the storage zone, the script, and the pull
+  zone, uploads the build, sets every variable, and publishes. No password
+  passes through your terminal.
 - **Build escape hatches.** `external`, `sourcemap`, and an `esbuild()` hook.
 
 Also: the README no longer says `node:fs` is unavailable. Edge Scripting

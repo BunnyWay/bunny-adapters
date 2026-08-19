@@ -20,7 +20,7 @@
  */
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { readdir } from "node:fs/promises";
+import { cp, readdir, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { startLocalZone } from "../packages/astro/dist/build/local-zone.js";
@@ -107,11 +107,22 @@ export async function buildFixture(name, { expectFailure = false } = {}) {
  * deployed, running on the runtime it would run on, reading the zone it would
  * read.
  */
-export async function serveFixture(name, { env = {}, ...options } = {}) {
+export async function serveFixture(name, { env = {}, assetPrefix, ...options } = {}) {
   const built = await buildFixture(name, options);
   if (!built.hasBundle()) throw new Error(`The "${name}" fixture built no bundle.`);
 
-  const zone = await startLocalZone({ dir: path.join(built.dist, "client"), zone: "fixture" });
+  // `bunny deploy` puts each deploy in its own folder and tells the script the
+  // name, so a published release can only read the files it was built with.
+  // Reproduce that layout: the zone root holds `<prefix>/`, and nothing else.
+  let clientDir = path.join(built.dist, "client");
+  if (assetPrefix) {
+    const root = path.join(built.dist, ".test-prefixed");
+    await rm(root, { recursive: true, force: true });
+    await cp(clientDir, path.join(root, assetPrefix), { recursive: true });
+    clientDir = root;
+  }
+
+  const zone = await startLocalZone({ dir: clientDir, zone: "fixture" });
   // Sessions never touch dist/client. That folder is what a deploy uploads,
   // so a session written by a test must not end up looking like an asset.
   const sessions = await startLocalZone({
@@ -133,6 +144,7 @@ export async function serveFixture(name, { env = {}, ...options } = {}) {
       BUNNY_SESSION_ZONE: sessions.zone,
       BUNNY_SESSION_HOST: sessions.host,
       BUNNY_SESSION_KEY: "fixture",
+      ...(assetPrefix ? { BUNNY_ASSET_PREFIX: assetPrefix } : {}),
       ...env,
     },
   });
