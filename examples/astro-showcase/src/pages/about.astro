@@ -30,8 +30,8 @@ const builtAt = new Date().toISOString();
 
   <h2>How the script finds it</h2>
   <p>
-    The build writes <code>dist/client/about/index.html</code>, and
-    <code>bunny-astro deploy</code> uploads it. The adapter inlines the list of built files into the script,
+    The build writes <code>dist/client/about/index.html</code>,
+    and <code>bunny-astro deploy</code> uploads it. The adapter inlines the list of built files into the script,
     so a request for <code>/about</code> becomes one read and a miss becomes none at all.
   </p>
 </Layout>

@@ -45,8 +45,11 @@ packages/<framework>/
 └─ LICENSE            MIT, one copy per package
 ```
 
-Keep `src/server.ts` free of Node built-ins that Deno does not provide. Keep it
-small; it counts against the start-up budget.
+Keep `src/server.ts` small. It counts against the 500 ms start-up budget.
+
+Most `node:` built-ins are available, including `node:fs` over a virtual file
+system. That file system is per isolate and lives in memory, so it is a scratch
+pad and never a store. Persistent state belongs in Bunny Storage.
 
 ## The build contract
 

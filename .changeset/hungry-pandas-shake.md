@@ -33,6 +33,10 @@ Added:
   `--delete-stale`.
 - **Build escape hatches.** `external`, `sourcemap`, and an `esbuild()` hook.
 
+Also: the README no longer says `node:fs` is unavailable. Edge Scripting
+provides most `node:` built-ins, and the adapter already rewrites a bare `fs` to
+`node:fs` so a dependency resolves. Only a native binary is a real problem.
+
 Also: a server-rendered response that sets no `Cache-Control` now gets
 `private, no-store`. A bunny.net pull zone applies its own 30 day expiration to
 a response with no directive, so without this a page rendered for one visitor

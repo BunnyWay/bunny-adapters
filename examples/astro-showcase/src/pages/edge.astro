@@ -47,7 +47,8 @@ const edgeHeaders = [...Astro.request.headers.entries()]
     {
       edgeHeaders.length === 0 ? (
         <p style="margin:0" id="no-edge-headers">
-          None. You are not on the bunny.net network, so nothing added a<code>cdn-</code> header.
+          None. You are not on the bunny.net network, so nothing added
+          a <code>cdn-</code> header.
         </p>
       ) : (
         <table id="edge-headers">

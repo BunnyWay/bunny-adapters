@@ -67,6 +67,14 @@ pre {
   overflow-x: auto;
 }
 
+/* The inline styling above is wrong inside a block. Its padding would apply to
+   the first line only, and indent it by a space nobody can select. */
+pre code {
+  background: none;
+  border-radius: 0;
+  padding: 0;
+}
+
 .shell {
   max-width: 860px;
   margin: 0 auto;

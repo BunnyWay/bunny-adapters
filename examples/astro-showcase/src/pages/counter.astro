@@ -26,8 +26,8 @@ Astro.cookies.set("visits", String(visits), {
 
   <h2>One setting to check</h2>
   <p>
-    A pull zone created for an Edge Script has <strong>Disable cookies</strong> switched on, and it strips
-    <code>Set-Cookie</code> from every response. Turn it off, or the counter never moves:
+    A pull zone created for an Edge Script has <strong>Disable cookies</strong> switched on, and it
+    strips <code>Set-Cookie</code> from every response. Turn it off, or the counter never moves:
   </p>
   <pre><code>bunny api POST /pullzone/&lt;pull-zone-id&gt; --body '&#123;"DisableCookies": false&#125;'</code></pre>
 </Layout>

@@ -122,6 +122,7 @@ anything your code reads from them is absent locally.
 | Prerendered `404.astro` and `500.astro`                      | Yes, served from Storage                                 |
 | `routeRules` and cache purging                               | Yes. [Turn Smart Cache off](#turn-smart-cache-off-first) |
 | Image transformation                                         | Yes, with Bunny Optimizer                                |
+| `node:fs` and the other built-ins Deno provides              | Yes. [See below](#node-built-ins)                        |
 | `astro:env` secrets                                          | Yes, from script environment variables                   |
 | `astro preview`                                              | Yes, with Deno                                           |
 | Static page headers, such as a CSP                           | Yes, applied by the script                               |
@@ -262,6 +263,25 @@ declare namespace App {
 }
 ```
 
+## Node built-ins
+
+Edge Scripting provides most `node:` modules, so a dependency that imports one
+is usually fine. The adapter rewrites a bare `fs` to `node:fs` during the build,
+because the runtime only answers to the prefixed name.
+
+[`node:fs`](https://bunny.net/docs/scripting/node-fs) works over a virtual file
+system. Know what that is before you rely on it:
+
+- It starts empty on every cold start.
+- One isolate cannot see what another wrote.
+- What it holds counts against the script's memory.
+
+So it is a scratch pad for one request, never a store. Anything that has to
+outlive a request belongs in Bunny Storage, which is where the adapter keeps
+assets and sessions. The showcase has a working endpoint at `/api/scratch`.
+
+What does not work is a package with a native binary. `sharp` is the usual one.
+
 ## Cookies
 
 A pull zone created for a script has **Disable cookies** switched on, which
@@ -343,9 +363,10 @@ the [Edge Scripting limits](https://bunny.net/docs/scripting/limits).
 
 ## Troubleshooting
 
-**The bundle fails to resolve `fs` or `child_process`.** A dependency needs
-Node-only modules. `sharp` is the usual cause, and the adapter already replaces
-it. If something else does it, replace that dependency.
+**The bundle fails on a Node-only module.** Most `node:` built-ins work, so
+check which one it is. A package with a native binary never will. `sharp` is
+the usual cause, and the adapter already replaces it. If another dependency
+needs one, replace that dependency. See [Node built-ins](#node-built-ins).
 
 **Prerendered pages 404.** Upload `dist/client` again. Run
 `bunny-astro deploy`, which never leaves the two halves out of step.

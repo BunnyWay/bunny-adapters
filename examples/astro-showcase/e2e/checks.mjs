@@ -111,6 +111,17 @@ export const checks = [
   },
 
   {
+    name: "node:fs survives the bundle and works at runtime",
+    async run({ get, assert }) {
+      // Edge Scripting gives the script a virtual file system, so a dependency
+      // that reaches for node:fs is not automatically a problem.
+      const response = await get("/api/scratch");
+      assert(response.status === 200, `status ${response.status}`);
+      assert(JSON.parse(response.body).ok === true, "the file did not read back");
+    },
+  },
+
+  {
     name: "a dynamic route renders",
     async run({ get, assert }) {
       const response = await get("/blog/hello-edge");
@@ -259,6 +270,48 @@ export const checks = [
 
       const back = await get("/session", { headers: { cookie } });
       assert(textOf(back.body, "session-name") === "Bunny", "the session did not come back");
+    },
+  },
+
+  {
+    name: "no page has lost the space before a tag",
+    async run({ get, assert }) {
+      // Astro compresses HTML, so a newline between a word and the tag after
+      // it disappears and the two words run together on the page. Writing
+      // "so a plain\n<code>" is enough to cause it, and it is easy to miss.
+      const pages = [
+        "/",
+        "/edge",
+        "/counter",
+        "/session",
+        "/gallery",
+        "/cached",
+        "/about",
+        "/blog/hello-edge",
+        "/nothing-is-here",
+      ];
+      for (const path of pages) {
+        const body = (await get(path)).body;
+        const glued = body.match(/[A-Za-z,.)]<(?:a|code|strong|em)\b[^>]*>/g);
+        assert(!glued, `${path} runs words together: ${glued?.slice(0, 3).join(", ")}`);
+      }
+    },
+  },
+
+  {
+    name: "every link on the home page resolves",
+    async run({ get, assert }) {
+      // A formatter once turned href={page.href} into a literal string, and
+      // every tile pointed at /%7Bpage.href%7D.
+      const body = (await get("/")).body;
+      const links = [...body.matchAll(/href="(\/[^"]*)"/g)].map((match) => match[1]);
+      assert(links.length > 8, `found only ${links.length} links`);
+
+      for (const href of new Set(links)) {
+        assert(!/[{}]|%7[bd]/i.test(href), `${href} is not a real path`);
+        const status = (await get(href, { method: "HEAD" })).status;
+        assert(status === 200, `${href} answered ${status}`);
+      }
     },
   },
 

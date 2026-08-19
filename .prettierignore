@@ -2,3 +2,9 @@ dist/
 .astro/
 CHANGELOG.md
 package-lock.json
+
+# Prettier's Astro plugin rewrites `href={expr}` into `href="{expr}"`, which
+# turns a live expression into a literal string. It also drops the whitespace
+# between a word and the tag after it, which Astro's HTML compression then
+# cannot put back. Format these by hand.
+*.astro
