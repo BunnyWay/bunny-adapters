@@ -274,6 +274,27 @@ export const checks = [
   },
 
   {
+    name: "a dynamic route with nothing to show gets the 404 page",
+    async run({ get, assert }) {
+      // The route matches, so Astro will not reach for the error page itself.
+      const response = await get("/blog/missing", { headers: { accept: "text/html" } });
+      assert(response.status === 404, `status ${response.status}`);
+      assert(textOf(response.body, "not-found"), "the 404 page did not come back");
+    },
+  },
+
+  {
+    name: "an endpoint keeps its own 404",
+    async run({ get, assert }) {
+      // Only a page is rerouted to the 404 page. A client calling an endpoint
+      // must never be handed a web page instead of an answer.
+      const response = await get("/api/missing");
+      assert(response.status === 404, `status ${response.status}`);
+      assert(!/<html/i.test(response.body), "an HTML page came back from an endpoint");
+    },
+  },
+
+  {
     name: "no page has lost the space before a tag",
     async run({ get, assert }) {
       // Astro compresses HTML, so a newline between a word and the tag after
@@ -292,7 +313,9 @@ export const checks = [
       ];
       for (const path of pages) {
         const body = (await get(path)).body;
-        const glued = body.match(/[A-Za-z,.)]<(?:a|code|strong|em)\b[^>]*>/g);
+        const glued = body.match(
+          /[A-Za-z,.)]<(?:a|code|strong|em)\b[^>]*>|<\/(?:a|code|strong|em)>[A-Za-z(]/g,
+        );
         assert(!glued, `${path} runs words together: ${glued?.slice(0, 3).join(", ")}`);
       }
     },

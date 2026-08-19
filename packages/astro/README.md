@@ -368,6 +368,12 @@ check which one it is. A package with a native binary never will. `sharp` is
 the usual cause, and the adapter already replaces it. If another dependency
 needs one, replace that dependency. See [Node built-ins](#node-built-ins).
 
+**`Astro.rewrite("/404")` throws a 500.** A prerendered route has no server
+component to rewrite to. Return `new Response(null, { status: 404 })` from the
+page instead, and the adapter serves your prerendered 404 page out of Storage.
+An endpoint in `src/pages/api/` keeps its own 404, so a JSON client is never
+handed a web page.
+
 **Prerendered pages 404.** Upload `dist/client` again. Run
 `bunny-astro deploy`, which never leaves the two halves out of step.
 

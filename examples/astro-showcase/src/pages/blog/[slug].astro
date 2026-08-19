@@ -15,7 +15,13 @@ const posts: Record<string, { title: string; body: string }> = {
 };
 
 const post = slug ? posts[slug] : undefined;
-if (!post) return Astro.rewrite("/404");
+
+// Answer 404 with no body of its own. The adapter then serves the prerendered
+// 404 page out of Bunny Storage.
+//
+// `Astro.rewrite("/404")` looks like the obvious thing here, and it throws: a
+// prerendered route has no server component to rewrite to.
+if (!post) return new Response(null, { status: 404 });
 ---
 
 <Layout title={post.title} badge="Dynamic route" lede={`/blog/${slug}`}>

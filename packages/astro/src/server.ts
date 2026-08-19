@@ -182,6 +182,10 @@ export async function handle(request: Request): Promise<Response> {
   };
 
   // 1. Astro owns this route. Render it now.
+  //
+  // A page that answers 404 with no body reaches back through
+  // `prerenderedErrorPageFetch` on its own, so the site's own 404 page comes
+  // out of Storage without the adapter doing anything here.
   const routeData = app.match(request);
   if (routeData) return withCacheControl(await app.render(request, { ...render, routeData }));
 
