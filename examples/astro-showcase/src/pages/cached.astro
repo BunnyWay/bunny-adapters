@@ -38,6 +38,17 @@ CDN-Tag: demo,astro-path:/cached</code></pre>
     what makes a purge take effect at once.
   </p>
 
+  <h2>Turn Smart Cache off first</h2>
+  <p>
+    Smart Cache only caches known static file extensions, and HTML is not one of them. It is on by
+    default, and while it is on this rule does nothing:
+  </p>
+  <pre><code>bunny api POST /pullzone/&lt;pull-zone-id&gt; --body '&#123;"EnableSmartCache": false&#125;'</code></pre>
+  <p>
+    The adapter then sets <code>Cache-Control: private, no-store</code> on every other page, so nothing
+    personal is cached by accident.
+  </p>
+
   <h2>Purging</h2>
   <pre><code>{`await Astro.cache.invalidate({ tags: ["demo"] });`}</code></pre>
   <p>

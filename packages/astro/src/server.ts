@@ -87,7 +87,6 @@ function runtimeContext(request: Request): BunnyRuntime {
     country: request.headers.get("cdn-requestcountrycode") ?? undefined,
     requestId: request.headers.get("cdn-requestid") ?? undefined,
     clientAddress: clientAddress(request),
-    server: request.headers.get("cdn-pullzone") ?? undefined,
     waitUntil,
     caches: typeof caches !== "undefined" ? caches : undefined,
     env,
@@ -158,6 +157,20 @@ async function prerenderedErrorPageFetch(url: string): Promise<Response> {
   return response;
 }
 
+/**
+ * Say how a rendered response may be cached, unless it already says.
+ *
+ * A bunny.net pull zone applies its own expiration to a response that carries
+ * no `Cache-Control`. Without this, a page rendered for one visitor could be
+ * cached and handed to the next one. A route that sets its own header, and a
+ * route matched by `routeRules`, both keep what they set.
+ */
+function withCacheControl(response: Response): Response {
+  if (response.headers.has("cache-control")) return response;
+  response.headers.set("cache-control", options.serverCacheControl);
+  return response;
+}
+
 /** Handle one request. Exported so it can be tested or wrapped. */
 export async function handle(request: Request): Promise<Response> {
   const render = {
@@ -170,7 +183,7 @@ export async function handle(request: Request): Promise<Response> {
 
   // 1. Astro owns this route. Render it now.
   const routeData = app.match(request);
-  if (routeData) return app.render(request, { ...render, routeData });
+  if (routeData) return withCacheControl(await app.render(request, { ...render, routeData }));
 
   // 2. Not an Astro route. Look for an asset or a prerendered page.
   const stored = await fromStorage(new URL(request.url).pathname, request.method);
@@ -178,7 +191,7 @@ export async function handle(request: Request): Promise<Response> {
 
   // 3. Nothing matched. Let Astro answer, which reaches back into Storage for
   //    a prerendered 404 when the project has one.
-  return app.render(request, render);
+  return withCacheControl(await app.render(request, render));
 }
 
 export function start(): void {

@@ -72,6 +72,18 @@ export interface BunnyAdapterOptions {
   pageCacheControl?: string;
 
   /**
+   * `Cache-Control` for a server-rendered response that sets none itself.
+   *
+   * This is not a performance setting. A bunny.net pull zone applies its own
+   * expiration to a response that carries no directive, so without this a
+   * personalised page could be cached and served to somebody else. A route
+   * that sets its own header, or that matches a `routeRules` entry, keeps it.
+   *
+   * @default "private, no-store"
+   */
+  serverCacheControl?: string;
+
+  /**
    * Store sessions in the storage zone when the project turns sessions on.
    * Set it to `false` to configure your own driver.
    * @default true

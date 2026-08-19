@@ -9,10 +9,15 @@ const rows: [string, string][] = [
   ["Astro.clientAddress", Astro.clientAddress || "unknown"],
   ["runtime.country", runtime?.country ?? "unknown"],
   ["runtime.requestId", runtime?.requestId ?? "none"],
-  ["runtime.server", runtime?.server ?? "none"],
   ["Astro.url", Astro.url.toString()],
   ["User agent", Astro.request.headers.get("user-agent") ?? "none"],
 ];
+
+// Everything the bunny.net network adds to the request. These only exist on
+// the real network, so the list is empty when you run the site yourself.
+const edgeHeaders = [...Astro.request.headers.entries()]
+  .filter(([name]) => name.startsWith("cdn-"))
+  .sort();
 ---
 
 <Layout
@@ -37,11 +42,29 @@ const rows: [string, string][] = [
     </table>
   </div>
 
-  <p class="lede" style="margin-top:1.5rem">
-    The country and the request id come from headers that only exist on the bunny.net network, so
-    they read <code>unknown</code> when you run the site on your own machine.
-  </p>
+  <h2>Every edge header on this request</h2>
+  <div class="card">
+    {
+      edgeHeaders.length === 0 ? (
+        <p style="margin:0" id="no-edge-headers">
+          None. You are not on the bunny.net network, so nothing added a<code>cdn-</code> header.
+        </p>
+      ) : (
+        <table id="edge-headers">
+          <tbody>
+            {edgeHeaders.map(([name, value]) => (
+              <tr>
+                <th>{name}</th>
+                <td class="value">{value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )
+    }
+  </div>
 
+  <h2>Using it</h2>
   <pre><code>{`const { country, requestId, clientAddress } = Astro.locals.runtime;
 
 // Keep working after the response goes out.

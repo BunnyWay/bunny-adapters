@@ -41,9 +41,15 @@ export const checks = [
 
   {
     name: "middleware puts the country on Astro.locals",
-    async run({ get, assert }) {
+    async run({ get, assert, mode }) {
+      // The edge writes this header itself, so a live run cannot choose it.
       const page = await get("/", { headers: { "cdn-requestcountrycode": "SI" } });
-      assert(textOf(page.body, "country") === "SI", `got ${textOf(page.body, "country")}`);
+      const country = textOf(page.body, "country");
+      if (mode === "live") {
+        assert(/^[A-Z]{2}$/.test(country ?? ""), `got ${country}`);
+      } else {
+        assert(country === "SI", `got ${country}`);
+      }
     },
   },
 
@@ -64,9 +70,15 @@ export const checks = [
 
   {
     name: "the edge request id reaches Astro.locals.runtime",
-    async run({ get, assert }) {
+    async run({ get, assert, mode }) {
       const page = await get("/edge", { headers: { "cdn-requestid": "abc123" } });
-      assert(textOf(page.body, "runtime-requestid") === "abc123", "request id is missing");
+      const id = textOf(page.body, "runtime-requestid");
+      if (mode === "live") {
+        // The edge overwrites the header with its own id.
+        assert(/^[0-9a-f]{16,}$/.test(id ?? ""), `got ${id}`);
+      } else {
+        assert(id === "abc123", `got ${id}`);
+      }
     },
   },
 
@@ -208,6 +220,18 @@ export const checks = [
       const tag = response.headers.get("cdn-tag") ?? "";
       assert(tag.includes("demo"), `cdn-tag ${tag}`);
       assert(tag.includes("astro-path:/cached"), `cdn-tag ${tag}`);
+    },
+  },
+
+  {
+    name: "a rendered page is never left cacheable by accident",
+    async run({ get, assert }) {
+      // A pull zone applies its own expiration to a response with no
+      // directive, which would hand one visitor's page to the next.
+      for (const path of ["/", "/session", "/edge"]) {
+        const value = (await get(path)).headers.get("cache-control") ?? "";
+        assert(/no-store/.test(value), `${path} answered with "${value}"`);
+      }
     },
   },
 

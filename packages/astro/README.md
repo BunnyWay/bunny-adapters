@@ -108,26 +108,26 @@ anything your code reads from them is absent locally.
 
 ## What works
 
-| Astro feature                                                | Supported                                  |
-| ------------------------------------------------------------ | ------------------------------------------ |
-| Server-rendered pages                                        | Yes                                        |
-| `src/pages/api/` endpoints                                   | Yes                                        |
-| `src/middleware.ts`                                          | Yes                                        |
-| Dynamic routes and server islands                            | Yes                                        |
-| `Astro.request`, `Astro.locals`, `Astro.url`, `Astro.params` | Yes                                        |
-| `Astro.clientAddress`                                        | Yes, from `x-forwarded-for`                |
-| `Astro.cookies`, including `set()`                           | Yes, [see the note](#cookies)              |
-| `Astro.session`                                              | Yes, stored in a storage zone              |
-| `export const prerender = true`                              | Yes, served from Storage                   |
-| Prerendered `404.astro` and `500.astro`                      | Yes, served from Storage                   |
-| `routeRules` and cache purging                               | Yes, over `CDN-Tag`                        |
-| Image transformation                                         | Yes, with Bunny Optimizer                  |
-| `astro:env` secrets                                          | Yes, from script environment variables     |
-| `astro preview`                                              | Yes, with Deno                             |
-| Static page headers, such as a CSP                           | Yes, applied by the script                 |
-| `sharp` image service                                        | No. Native binaries cannot run on the edge |
-| Edge middleware as a separate function                       | No. Middleware runs inside the script      |
-| i18n domains                                                 | Untested. Tell us if you need it           |
+| Astro feature                                                | Supported                                                |
+| ------------------------------------------------------------ | -------------------------------------------------------- |
+| Server-rendered pages                                        | Yes                                                      |
+| `src/pages/api/` endpoints                                   | Yes                                                      |
+| `src/middleware.ts`                                          | Yes                                                      |
+| Dynamic routes and server islands                            | Yes                                                      |
+| `Astro.request`, `Astro.locals`, `Astro.url`, `Astro.params` | Yes                                                      |
+| `Astro.clientAddress`                                        | Yes, from `x-forwarded-for`                              |
+| `Astro.cookies`, including `set()`                           | Yes, [see the note](#cookies)                            |
+| `Astro.session`                                              | Yes, stored in a storage zone                            |
+| `export const prerender = true`                              | Yes, served from Storage                                 |
+| Prerendered `404.astro` and `500.astro`                      | Yes, served from Storage                                 |
+| `routeRules` and cache purging                               | Yes. [Turn Smart Cache off](#turn-smart-cache-off-first) |
+| Image transformation                                         | Yes, with Bunny Optimizer                                |
+| `astro:env` secrets                                          | Yes, from script environment variables                   |
+| `astro preview`                                              | Yes, with Deno                                           |
+| Static page headers, such as a CSP                           | Yes, applied by the script                               |
+| `sharp` image service                                        | No. Native binaries cannot run on the edge               |
+| Edge middleware as a separate function                       | No. Middleware runs inside the script                    |
+| i18n domains                                                 | Untested. Tell us if you need it                         |
 
 ## Images
 
@@ -213,6 +213,31 @@ That calls the [purge API](https://bunny.net/docs/cdn/purge-cache), so the
 script needs `BUNNY_API_KEY` and `BUNNY_PULLZONE_ID`. Pass `cache: false` to
 configure your own provider.
 
+### Turn Smart Cache off first
+
+[Smart Cache](https://bunny.net/docs/cdn/smart-cache) only caches known static
+file extensions, and HTML is not one of them. It is on by default, and while it
+is on a `routeRules` entry has no effect: the page is rendered again for every
+request.
+
+```bash
+bunny api POST /pullzone/<pull-zone-id> --body '{"EnableSmartCache": false}'
+```
+
+Smart Cache exists to stop a misconfigured origin caching a personal page by
+accident, so read the next section before you switch it off.
+
+### Why a dynamic page says no-store
+
+A bunny.net pull zone applies its own expiration, by default 30 days, to any
+response that carries no `Cache-Control`. With Smart Cache off, that would
+cache a page rendered for one visitor and hand it to the next one.
+
+So the adapter sets `Cache-Control: private, no-store` on every server-rendered
+response that does not set one itself. A route with a `routeRules` entry, and a
+route that sets its own header, both keep what they set. Change the default
+with `serverCacheControl` if you know better for your site.
+
 ## The edge context
 
 Every page gets `Astro.locals.runtime`:
@@ -260,6 +285,7 @@ bunny({
   storageHost: "ny.storage.bunnycdn.com", // otherwise BUNNY_STORAGE_HOST
   assetCacheControl: "public, max-age=31536000, immutable",
   pageCacheControl: "public, max-age=60",
+  serverCacheControl: "private, no-store", // for a page that sets none itself
 
   // Features
   imageService: "noop", // "bunny" for Optimizer, false to keep your own
@@ -335,6 +361,13 @@ See [Cookies](#cookies).
 **The build warns about `Astro.request.headers`.** Middleware also runs while
 Astro prerenders a page, where there is no live request. Guard it with
 `if (context.isPrerendered) return next();`.
+
+**A `routeRules` entry changes nothing.** Smart Cache is on, and it does not
+cache HTML. See [above](#turn-smart-cache-off-first).
+
+**A page shows another visitor's content.** Something removed the
+`Cache-Control` the adapter sets. Check that no edge rule overrides it, and
+that the page is not setting a `public` directive itself.
 
 **Every request returns a storage error.** Check that `BUNNY_STORAGE_ZONE`
 matches the zone name, that `BUNNY_STORAGE_KEY` is a password of that zone, and

@@ -34,6 +34,7 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
     imageService = "noop",
     assetCacheControl = "public, max-age=31536000, immutable",
     pageCacheControl = "public, max-age=60",
+    serverCacheControl = "private, no-store",
     sessions = true,
     cache = true,
     assetManifest = true,
@@ -44,6 +45,7 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
     storageHost,
     assetCacheControl,
     pageCacheControl,
+    serverCacheControl,
   };
 
   const manifestLimit =

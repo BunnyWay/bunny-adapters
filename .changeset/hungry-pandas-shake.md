@@ -32,3 +32,8 @@ Added:
   deploys the script, so the two halves never fall out of step. `upload` gains
   `--delete-stale`.
 - **Build escape hatches.** `external`, `sourcemap`, and an `esbuild()` hook.
+
+Also: a server-rendered response that sets no `Cache-Control` now gets
+`private, no-store`. A bunny.net pull zone applies its own 30 day expiration to
+a response with no directive, so without this a page rendered for one visitor
+could be cached and handed to the next one. Change it with `serverCacheControl`.

@@ -9,6 +9,7 @@ export interface RuntimeOptions {
   storageHost: string;
   assetCacheControl: string;
   pageCacheControl: string;
+  serverCacheControl: string;
 }
 
 /**
@@ -57,9 +58,6 @@ export interface BunnyRuntime {
 
   /** The visitor's IP address. The same value as `Astro.clientAddress`. */
   clientAddress: string | undefined;
-
-  /** The name of the pull zone edge that served the request, when known. */
-  server: string | undefined;
 
   /**
    * Keep the isolate alive for background work after the response is sent.
