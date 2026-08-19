@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.tgz
+.DS_Store
+
+# The fixture installs the adapter from the repo root at test time.
+test/fixture/package-lock.json
+.astro/

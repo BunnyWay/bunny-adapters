@@ -1,0 +1,11 @@
+---
+const now = new Date().toISOString();
+const ua = Astro.request.headers.get("user-agent") ?? "none";
+const n = Number(Astro.cookies.get("n")?.value ?? 0) + 1;
+Astro.cookies.set("n", String(n), { path: "/" });
+---
+<html><body>
+  <p id="time">{now}</p>
+  <p id="ua">{ua}</p>
+  <p id="n">{n}</p>
+</body></html>
