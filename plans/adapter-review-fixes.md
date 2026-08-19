@@ -1,5 +1,44 @@
 # Close the findings from the adapter code review
 
+> **Built on 19 August 2026**, in commit `e505757`.
+>
+> Every fix landed as designed. Four things came out differently:
+>
+> 1. **The backslash needed two fixes, not one.** Encoding each segment stops a
+>    backslash reaching the URL parser, so the zone is safe either way. But a
+>    path such as `/a\b` then became one object called `a\b`, which no zone
+>    holds. `toObjectPath` now splits on a backslash as well, so the path means
+>    what the visitor asked for.
+> 2. **The `outfile` guard failed its first test.** `fileURLToPath` keeps the
+>    trailing slash of a directory URL, so `serverPath + path.sep` held two
+>    separators and the comparison never matched. `path.resolve` drops it.
+> 3. **The 405 answer had to come after the lookup, not before.** Refusing on
+>    the method alone made a `POST` to any unknown path answer 405 instead of
+>    the site's 404 page. The suite now covers that case as well.
+> 4. **`encodeURIComponent` escapes `=` too.** So `/asset%3Fdownload=1` asks for
+>    `asset%3Fdownload%3D1`. That is still one literal object name, which is the
+>    point, but the first test expected the `=` to survive.
+>
+> **Verified.** 96 unit tests, 26 end-to-end checks, and 139 fixture tests, all
+> passing. `tsc --noEmit`, `prettier --check`, `publint --strict` and `attw` all
+> clean. The bundle is 666 kB against the 10 MB limit.
+>
+> Findings 1, 2, 3, 5, 6 and 7 were each re-run against the reproduction that
+> found them, on the built bundle or the built CLI:
+>
+> | Finding                | Before                                | After                                    |
+> | ---------------------- | ------------------------------------- | ---------------------------------------- |
+> | Traversal              | asks `/other-zone/secret.json`        | asks `/my-zone/%252e%252e/other-zone/…`  |
+> | Preview sessions       | `dist/client/_sessions/<id>.json`     | `dist/.preview-sessions/…`, upload clean |
+> | `--concurrency eight`  | exit 0, 0 uploads, "Upload complete." | exit 1, 0 uploads, names the flag        |
+> | `DELETE /big.bin`      | 200, 65536 bytes                      | 405, `Allow: GET, HEAD`                  |
+> | `height=99999`         | `?height=99999`                       | `?height=1000`                           |
+> | Wrong storage password | 404 everywhere, empty log             | 404 everywhere, one line naming the zone |
+>
+> **Not verified here.** The release workflow gate and the Node 20 matrix only
+> run on GitHub. The live tier was not run, because it needs a credential and it
+> proves nothing these fixes touch.
+
 A review of the whole repository found twelve defects. This plan fixes eleven of
 them. It leaves one out, because the team already knows about it.
 
