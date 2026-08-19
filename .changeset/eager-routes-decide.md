@@ -27,7 +27,11 @@ neither counts. A project whose only on-demand work is a `server:defer` componen
 has to say `deploy: "server"`, which is the new option this adds.
 
 A script above the 10 MB limit now fails the build, and says which packages
-filled it. It used to log an error, finish with `Complete!` and exit 0, which let
+filled it. A script above 7.5 MB gets a warning, because the documented 10 MB is
+not the size that works: measured in August 2026, the same code served every
+request at 7.44 MB and answered 400 with an empty body at 7.83 MB. The inlined
+asset manifest is capped at 5000 files for the same reason; 8824 of them cost
+410 kB of a budget that turns out to be about 7.5 MB. It used to log an error, finish with `Complete!` and exit 0, which let
 `bunny deploy` get as far as creating a site before it stopped.
 
 A build with no route on demand now says how many images it copied without

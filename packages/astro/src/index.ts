@@ -10,6 +10,7 @@ import path from "node:path";
 import type { AstroIntegration, RouteToHeaders } from "astro";
 import {
   SIZE_LIMIT,
+  START_RISK_SIZE,
   bundleServer,
   formatSize,
   relativeTo,
@@ -48,8 +49,15 @@ const PACKAGE = "@bunny.net/astro-adapter";
  */
 const ALWAYS_INJECTED = new Set(["/_image", "/_server-islands/[name]", "/404"]);
 
-/** Above this many client files, the manifest costs more than it saves. */
-const DEFAULT_MANIFEST_LIMIT = 20_000;
+/**
+ * Above this many client files, the manifest costs more than it saves.
+ *
+ * Every path is bytes in a script that has a real budget: 8824 of them cost
+ * 410 kB, and a script near 8 MB does not start. So the default is the number
+ * whose cost stays small next to that budget, and a site with more files probes
+ * Storage for a miss instead.
+ */
+const DEFAULT_MANIFEST_LIMIT = 5_000;
 
 const require = createRequire(import.meta.url);
 
@@ -343,6 +351,18 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
           logger.info(
             `Bundled to ${relative} (${formatSize(bytes)}, limit ${formatSize(SIZE_LIMIT)}).` +
               (onDemandRoutes ? ` ${onDemandRoutes} route(s) render per request.` : ""),
+          );
+        }
+
+        // The documented limit is 10 MB, and a script well under it can still
+        // fail to start. Saying nothing here leaves a green build and a site that
+        // answers 400 with no body.
+        if (needsScript && bytes > START_RISK_SIZE) {
+          logger.warn(
+            `${relative} is ${formatSize(bytes)}, and a script this large often fails to start. ` +
+              "The edge then answers 400 with an empty body. Measured in August 2026: the same code " +
+              "served every request at 7.4 MB, and none at 7.8 MB. Prerender a route, or drop a " +
+              "dependency the server does not need.",
           );
         }
 

@@ -59,6 +59,19 @@ export const NODE_BUILTINS = [
 /** Edge Scripting refuses a script above this size. */
 export const SIZE_LIMIT = 10 * 1024 * 1024;
 
+/**
+ * Above this, a published script often fails to start, and the edge answers 400
+ * with an empty body.
+ *
+ * Measured in August 2026, on a standalone script in DE, in the units this
+ * adapter prints: the same code at 7.44 MB (7,798,944 bytes) served every
+ * request, and at 7.83 MB (8,209,699 bytes) answered 400 to all of them. Around
+ * 7.5 MB the first request failed and later ones worked. The documented limit is
+ * 10 MB, and nothing about the real one is reported anywhere, so the adapter
+ * says it.
+ */
+export const START_RISK_SIZE = 7.5 * 1024 * 1024;
+
 export interface BundleParams {
   /** Astro's server entry, for example `dist/server/entry.mjs`. */
   entryPoint: string;
