@@ -11,12 +11,16 @@ mentions `output` and has one dynamic route reported a build with no server. The
 files went up, the dynamic routes did not, and nothing said so. Measured on
 `withastro/astro.build`, which has nine such routes.
 
-The adapter now counts the routes that render per request, and the build manifest
-follows:
+The adapter now decides from the routes, and from what plain files can do. Bunny
+Storage holds objects and nothing else: it cannot answer a missing page with the
+404 page Astro built, cannot redirect, and cannot add a header. So the build
+manifest says:
 
-- Any route on demand: `kind: "ssr"`, and the script is deployed with the files.
-- No route on demand: `kind: "static"`, and no script is named. `astro preview`
-  still gets a bundle to run.
+- `kind: "ssr"` when a route renders per request, or when the site has a 404
+  page, a prerendered redirect, or a header to apply. The script is deployed with
+  the files.
+- `kind: "static"` only when plain files behave exactly the same. No script is
+  named, and `astro preview` still gets a bundle to run.
 
 Astro injects `/_image` and `/_server-islands/[name]` into every project, so
 neither counts. A project whose only on-demand work is a `server:defer` component

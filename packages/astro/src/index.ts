@@ -4,6 +4,7 @@
  */
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
 import { rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AstroIntegration, RouteToHeaders } from "astro";
@@ -36,12 +37,16 @@ const PACKAGE = "@bunny.net/astro-adapter";
  * Routes Astro injects into every project, used or not.
  *
  * They render per request, so counting them would make every project look like
- * it needs a server. `/_image` is only reached by a page that renders on demand,
- * and `/_server-islands/[name]` only by a page holding a `server:defer`
- * component. A project with an island and nothing else on demand has to say so
- * with `deploy: "server"`, because nothing in the route list tells them apart.
+ * it needs a server. `/_image` is only reached by a page that renders on demand;
+ * `/_server-islands/[name]` only by a page holding a `server:defer` component;
+ * and `/404` is Astro's own answer for a project that wrote no 404 page. A
+ * project whose own `404.astro` is prerendered reports that route as prerendered,
+ * and a project that renders one per request reports it as its own.
+ *
+ * A project with an island and nothing else on demand has to say so with
+ * `deploy: "server"`, because nothing in the route list tells them apart.
  */
-const ALWAYS_INJECTED = new Set(["/_image", "/_server-islands/[name]"]);
+const ALWAYS_INJECTED = new Set(["/_image", "/_server-islands/[name]", "/404"]);
 
 /** Above this many client files, the manifest costs more than it saves. */
 const DEFAULT_MANIFEST_LIMIT = 20_000;
@@ -250,6 +255,24 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
           deploy === "server" ||
           (onDemandRoutes === null ? outputMode !== "static" : onDemandRoutes > 0);
 
+        // A prerendered site is not always servable as plain files. Bunny Storage
+        // holds objects and nothing else: it cannot answer a 404 with the page
+        // Astro built for it, cannot redirect, and cannot add a header. The
+        // script does all three, so anything that needs one needs the script.
+        const has404 = ["404.html", "404/index.html"].some((name) =>
+          existsSync(new URL(name, clientDir)),
+        );
+        const scriptDoes = [
+          ...(has404 ? ["answers a missing page with your 404 page"] : []),
+          ...(manifest.redirects
+            ? [`sends ${new Set(Object.values(manifest.redirects)).size} prerendered redirect(s)`]
+            : []),
+          ...(manifest.headers
+            ? [`adds the headers ${Object.keys(manifest.headers).length} path(s) ask for`]
+            : []),
+        ];
+        const needsScript = rendersOnDemand || scriptDoes.length > 0;
+
         const { bytes, largest } = await bundleServer({
           entryPoint: fileURLToPath(new URL(serverEntry, serverDir)),
           rootDir,
@@ -288,14 +311,14 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
         );
 
         const relative = relativeTo(rootDir, outPath);
-        if (!rendersOnDemand) {
+        if (!needsScript) {
           // Nothing is deployed from this file, so its size is nobody's problem.
           logger.info(
-            `Every route is prerendered, so \`bunny deploy\` uploads the files and no script. ` +
-              `${relative} is what \`astro preview\` runs (${formatSize(bytes)}).`,
+            `Every route is prerendered: \`bunny deploy\` uploads ${relativeTo(rootDir, fileURLToPath(clientDir))}, and deploys no script. ` +
+              `${relative} is there for \`astro preview\` (${formatSize(bytes)}).`,
           );
           logger.info(
-            'A server island needs the script, and no route says so. Pass deploy: "server" to deploy one.',
+            'A `server:defer` component needs the script. If this site has one, pass deploy: "server".',
           );
         } else if (bytes > SIZE_LIMIT) {
           // A build whose script cannot be deployed has not succeeded. Failing
@@ -307,6 +330,11 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
               "A package that only runs at build time does not belong in the server. Two things usually help:\n" +
               "  - Prerender the routes that do not need a server: `export const prerender = true`.\n" +
               "  - Keep a heavy dependency out of a page, and out of anything a page imports.",
+          );
+        } else if (!rendersOnDemand) {
+          logger.info(
+            `Every route is prerendered. The script is deployed with them because it ` +
+              `${scriptDoes.join(", and ")}. Bundled to ${relative} (${formatSize(bytes)}, limit ${formatSize(SIZE_LIMIT)}).`,
           );
         } else {
           logger.info(
@@ -331,10 +359,10 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
           manifestVersion: MANIFEST_VERSION,
           adapter: { package: PACKAGE, version: versionOf("../package.json") },
           framework: { name: "astro", version: astroVersion },
-          kind: rendersOnDemand ? "ssr" : "static",
+          kind: needsScript ? "ssr" : "static",
           // A static build has nothing to deploy but its files. Naming a script
           // here would have the CLI upload one that never runs.
-          ...(rendersOnDemand ? { script: { entry: relative, type: "standalone", bytes } } : {}),
+          ...(needsScript ? { script: { entry: relative, type: "standalone", bytes } } : {}),
           assets: { dir: relativeTo(rootDir, fileURLToPath(clientDir)) },
           requires: {
             // No `cliVersion` floor yet. `manifestVersion` already stops a CLI

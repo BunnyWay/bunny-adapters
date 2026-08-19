@@ -25,18 +25,21 @@ describe("static-output", () => {
     }
   });
 
-  // `astro preview` runs the bundle, so the build still writes one. What the
-  // CLI must not do is deploy it: there is no route for it to answer.
-  it("builds a bundle for preview, and tells the CLI not to deploy it", () => {
+  // Nothing here renders per request, and the script is still what gets
+  // deployed: this fixture has a 404 page, and Bunny Storage cannot answer a
+  // missing object with it. `tests/fixtures/files-only` is the shape that needs
+  // no script at all.
+  it("deploys the script, because a stored 404 page needs one", () => {
     assert.ok(site.hasBundle());
     const manifest = site.manifest();
-    assert.equal(manifest.kind, "static");
-    assert.equal(manifest.script, undefined);
+    assert.equal(manifest.kind, "ssr");
+    assert.equal(manifest.script?.entry, "dist/index.js");
     assert.equal(manifest.assets.dir, "dist/client");
   });
 
-  it("says what will be deployed, and gives no advice about output modes", () => {
-    assert.match(site.log, /Every route is prerendered/);
+  it("says why the script is there, and gives no advice about output modes", () => {
+    assert.match(site.log, /Every route is prerendered\. The script is deployed with them/);
+    assert.match(site.log, /your 404 page/);
     assert.doesNotMatch(site.log, /Set output: "server"/);
   });
 
