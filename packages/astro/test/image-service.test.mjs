@@ -109,6 +109,48 @@ describe("validateOptions", () => {
     );
     assert.deepEqual(options.widths, [400, 800]);
   });
+
+  it("holds the height to the same maximum", () => {
+    const options = service.validateOptions(
+      { src: imported, height: 9000 },
+      config({ maxWidth: 1000 }),
+    );
+    assert.equal(options.height, 1000);
+  });
+
+  it("holds a cover crop box to the maximum on both sides", () => {
+    // `fit: "cover"` asks Optimizer for width x height pixels. A clamped width
+    // beside a free height still asks for a wall-sized image.
+    const limited = config({ maxWidth: 1000 });
+    const options = service.validateOptions(
+      { src: imported, width: 5000, height: 9000, fit: "cover" },
+      limited,
+    );
+    assert.deepEqual(query(service.getURL(options, limited)), { crop: "1000,1000" });
+  });
+
+  it("keeps a quality inside the 1 to 100 scale Optimizer reads", () => {
+    const cases = [
+      [500, "100"],
+      [-20, "1"],
+      ["500", "100"],
+      ["-20", "1"],
+    ];
+    for (const [quality, expected] of cases) {
+      const options = service.validateOptions({ src: imported, width: 100, quality }, config());
+      assert.equal(
+        query(service.getURL(options, config())).quality,
+        expected,
+        `quality ${JSON.stringify(quality)}`,
+      );
+    }
+  });
+
+  it("keeps a configured default quality inside the scale too", () => {
+    const loud = config({ quality: 900 });
+    const options = service.validateOptions({ src: imported, width: 100 }, loud);
+    assert.equal(query(service.getURL(options, loud)).quality, "100");
+  });
 });
 
 describe("getSrcSet", () => {

@@ -69,11 +69,13 @@ function env(key: string): string | undefined {
  * tag would never match a purge, which fails silently and is worse than a tag
  * that was left out.
  */
+const encoder = new TextEncoder();
+
 function tagHeader(tags: string[]): string | undefined {
   let value = "";
   for (const tag of tags) {
     const next = value ? `${value},${tag}` : tag;
-    if (new TextEncoder().encode(next).length > MAX_TAG_BYTES) break;
+    if (encoder.encode(next).length > MAX_TAG_BYTES) break;
     value = next;
   }
   return value || undefined;

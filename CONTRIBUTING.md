@@ -16,36 +16,56 @@ npm install
 npm run build
 ```
 
+Continuous integration runs the checks on Node 20 and on Node 22.
+
 This is an npm workspaces monorepo. `npm install` at the root installs every
 package, and links each example to the adapter beside it.
 
 ## Test tiers
 
-Three tiers exist. The first two need no bunny.net account and no network.
+Four tiers exist. The first three need no bunny.net account and no network.
+`npm run test:all` runs those three.
 
-| Command                        | What it does                                               |
-| ------------------------------ | ---------------------------------------------------------- |
-| `npm test`                     | Unit tests on the pure helpers. Fast.                      |
-| `npm run test:e2e`             | Builds the showcase, runs it on Deno, asserts every route. |
-| `node scripts/deploy-demo.mjs` | Deploys the showcase and asserts against the live URL.     |
+| Command                 | What it does                                               |
+| ----------------------- | ---------------------------------------------------------- |
+| `npm test`              | Unit tests on the pure helpers. Fast.                      |
+| `npm run test:e2e`      | Builds the showcase, runs it on Deno, asserts every route. |
+| `npm run test:fixtures` | One small project per configuration, each one run on Deno. |
+| `npm run test:live`     | Runs the checks against a real deployment. By hand only.   |
 
-The second tier is the important one. `tests/storage-emulator.mjs` answers like a
-Bunny Storage zone over the local `dist/client` folder, so the suite covers
-assets, prerendered pages and the 404 page without any cloud resource.
+`startLocalZone`, in `packages/astro/src/build/local-zone.ts`, answers like a
+Bunny Storage zone over a local folder. Tiers two and three both use it, so they
+cover assets, prerendered pages, ranges and the 404 page with no cloud resource.
+It records every path it is asked for, so a test can prove where the script
+looked and not only what came back.
 
-The third tier is manual, and it needs `BUNNY_API_KEY`. Continuous integration
-never runs it, and no credential is stored in this repository.
+The fourth tier needs a credential, and it is the only tier that can prove a
+pull zone feature. Continuous integration never runs it. This repository stores
+no credential.
+
+[docs/writing-an-adapter.md](./docs/writing-an-adapter.md) says what question
+each tier answers.
 
 ## Add a test
 
-`examples/astro-showcase` is both the demo and the fixture. To cover a new
-capability:
+Which tier depends on what the behaviour depends on.
+
+**A behaviour that changes with configuration** needs a fixture. Add a small
+Astro project under `tests/fixtures/<name>`, and a suite at
+`tests/suites/<name>.test.mjs`. `serveFixture` in `tests/harness.mjs` builds it
+and runs it on Deno behind the local zone. A fixture needs no install of its
+own, because Node walks up to this repository's `node_modules`.
+
+**A behaviour that does not** goes in the showcase:
 
 1. Add a page to `examples/astro-showcase/src/pages/` that demonstrates it.
 2. Add one entry to `examples/astro-showcase/e2e/checks.mjs`.
 
-Both tiers pick it up. The demo and the test suite cannot drift apart, because
-they are the same thing.
+The showcase is the demo and the end-to-end fixture, so those two cannot drift
+apart.
+
+**A pure helper** gets a unit test in `packages/<framework>/test/*.test.mjs`.
+Anything that needs a network belongs higher up.
 
 ## Add an adapter
 

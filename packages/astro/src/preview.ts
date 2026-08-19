@@ -24,6 +24,9 @@ interface BuildInfo {
 
 const INFO_FILE = ".bunny-adapter.json";
 
+/** Where preview keeps its sessions. Inside `outDir`, outside the client build. */
+const SESSION_DIR = ".preview-sessions/";
+
 async function readBuildInfo(outDir: URL): Promise<BuildInfo | null> {
   try {
     return JSON.parse(await readFile(new URL(INFO_FILE, outDir), "utf8")) as BuildInfo;
@@ -82,9 +85,19 @@ const createPreviewServer: CreatePreviewServer = async ({
   const rootDir = fileURLToPath(root);
   const bundlePath = path.resolve(rootDir, info.outfile);
 
-  // The zone stands in for Bunny Storage. It is writable, so a session written
-  // during preview survives the next request.
+  // The asset zone stands in for Bunny Storage over the real client build.
   const zone = await startLocalZone({ dir: fileURLToPath(client), zone: "preview" });
+
+  // Sessions get a zone of their own, over a folder outside the client build.
+  //
+  // Sharing one zone would write every session into `dist/client`, which is the
+  // folder `bunny-astro upload` publishes. A developer who previewed and then
+  // deployed without rebuilding would put their local sessions in the public
+  // asset zone, where the script serves them like any other object.
+  const sessions = await startLocalZone({
+    dir: fileURLToPath(new URL(SESSION_DIR, outDir)),
+    zone: "preview-sessions",
+  });
 
   // Astro passes a name or nothing. The runtime listens on an address.
   const hostname = !host || host === "localhost" ? "127.0.0.1" : host;
@@ -98,7 +111,8 @@ const createPreviewServer: CreatePreviewServer = async ({
       BUNNY_STORAGE_ZONE: zone.zone,
       BUNNY_STORAGE_HOST: zone.host,
       BUNNY_STORAGE_KEY: "preview",
-      BUNNY_SESSION_ZONE: zone.zone,
+      BUNNY_SESSION_ZONE: sessions.zone,
+      BUNNY_SESSION_HOST: sessions.host,
       BUNNY_SESSION_KEY: "preview",
     },
   });
@@ -112,7 +126,7 @@ const createPreviewServer: CreatePreviewServer = async ({
   try {
     await waitForServer(url, child);
   } catch (error) {
-    await zone.close();
+    await Promise.all([zone.close(), sessions.close()]);
     throw error;
   }
   logger.info(`Serving ${path.relative(rootDir, bundlePath)} on Deno, with a local storage zone.`);
@@ -123,7 +137,7 @@ const createPreviewServer: CreatePreviewServer = async ({
     closed: () => closed,
     async stop() {
       child.kill();
-      await zone.close();
+      await Promise.all([zone.close(), sessions.close()]);
       await closed.catch(() => {});
     },
   };

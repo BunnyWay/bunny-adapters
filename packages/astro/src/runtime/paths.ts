@@ -4,11 +4,18 @@
  * These functions are pure, so the unit tests cover them without a network or a
  * runtime. Path traversal is handled here, because the script holds a storage
  * password and must never let a request reach outside its own zone.
+ *
+ * The rule is: decode exactly once, then treat the result as literal text, and
+ * encode it again when it goes back into a URL. Decoding twice is what lets a
+ * traversal through, because each layer filters what the layer after it decodes.
  */
 
 /**
  * Strip the leading slash, decode the path, and drop every traversal segment.
  * `/a/../../etc/passwd` becomes `a/etc/passwd`, which the zone does not hold.
+ *
+ * A backslash separates too. The URL parser treats it as one for an `https:`
+ * URL, so a segment that kept it would climb out of the zone later.
  */
 export function toObjectPath(pathname: string): string {
   let decoded: string;
@@ -20,10 +27,25 @@ export function toObjectPath(pathname: string): string {
     decoded = pathname;
   }
   return decoded
-    .replace(/^\/+/, "")
-    .split("/")
+    .split(/[/\\]/)
     .filter((part) => part !== "" && part !== "." && part !== "..")
     .join("/");
+}
+
+/**
+ * An object path, encoded to go back into a URL.
+ *
+ * `toObjectPath` has already decoded once, so what it returns is literal text.
+ * Handing that to `fetch` unchanged lets the URL parser decode a second time,
+ * and the parser reads its own dot segments: `%2e%2e` climbs a level, and `?`
+ * starts a query. Either one reaches outside the configured zone, carrying the
+ * zone password with it.
+ *
+ * Each segment is encoded on its own, so the slashes that separate them survive
+ * and nothing else does.
+ */
+export function encodeObjectPath(object: string): string {
+  return object.split("/").map(encodeURIComponent).join("/");
 }
 
 /**

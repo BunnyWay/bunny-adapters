@@ -194,7 +194,20 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
         });
 
         // The bundle now holds every server chunk, so the folder is dead weight.
-        await rm(fileURLToPath(serverDir), { recursive: true, force: true });
+        // Unless the bundle was written into it: removing the folder would then
+        // delete the file this step just reported, and the build would still
+        // succeed. Keep the folder and say why.
+        // `resolve` drops the trailing slash a directory URL carries, so the
+        // comparison below has a separator on exactly one side.
+        const serverPath = path.resolve(fileURLToPath(serverDir));
+        if (outPath.startsWith(serverPath + path.sep)) {
+          logger.warn(
+            `outfile is inside ${relativeTo(rootDir, serverPath)}, so the server output was kept. ` +
+              "Point outfile somewhere else to have it cleared away.",
+          );
+        } else {
+          await rm(serverPath, { recursive: true, force: true });
+        }
 
         // What `astro preview` needs to find the bundle again.
         await writeFile(

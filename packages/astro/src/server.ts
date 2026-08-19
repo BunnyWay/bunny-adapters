@@ -190,12 +190,29 @@ function fromRedirects(pathname: string, method: string): Response | null {
   return null;
 }
 
+/** True for the two methods that read an object and change nothing. */
+function isRead(method: string): boolean {
+  return method === "GET" || method === "HEAD";
+}
+
+/** A stored object is read-only, whatever the visitor asked to do to it. */
+function methodNotAllowed(): Response {
+  return new Response(null, {
+    status: 405,
+    headers: { allow: "GET, HEAD", "cache-control": options.serverCacheControl },
+  });
+}
+
 /**
  * Read one object for this request path, or return `null`.
  *
  * With the build manifest this makes at most one subrequest, and none at all
  * for a path the build never produced. Without it, a path with no extension
  * costs two, because the page may be `<route>/index.html` or `<route>.html`.
+ *
+ * A method other than `GET` or `HEAD` is refused, but only once the object is
+ * known to be there. A `POST` to a path the build never produced has to carry
+ * on to Astro, which answers it with the site's own 404 page.
  */
 async function fromStorage(
   pathname: string,
@@ -212,6 +229,9 @@ async function fromStorage(
   if (assets) {
     const object = resolveObject(local, assets);
     if (!object) return null;
+    // The manifest already proves the object exists, so refuse without paying
+    // for a subrequest.
+    if (!isRead(method)) return methodNotAllowed();
     candidates = [object];
   } else {
     candidates = objectCandidates(local);
@@ -219,7 +239,12 @@ async function fromStorage(
 
   for (const object of candidates) {
     const upstream = await storage.get(object, forward);
-    if (upstream) return fromStorageResponse(object, upstream, method);
+    if (!upstream) continue;
+    if (!isRead(method)) {
+      void upstream.body?.cancel();
+      return methodNotAllowed();
+    }
+    return fromStorageResponse(object, upstream, method);
   }
   return null;
 }
@@ -309,7 +334,14 @@ export function start(): void {
   // On the bunny.net network the SDK ignores the listener and uses the
   // platform's own. Off it, this is what lets `astro preview` and the test
   // suite choose a free port instead of fighting over 8080.
-  const port = Number(env("PORT") ?? env("BUNNY_PORT") ?? 8080);
+  //
+  // An empty variable is not nullish, so `??` would keep it and `Number("")`
+  // would give port 0. Fall back on anything that is not a real port number.
+  const requestedPort = Number(env("PORT") || env("BUNNY_PORT"));
+  const port =
+    Number.isInteger(requestedPort) && requestedPort >= 0 && requestedPort <= 65535
+      ? requestedPort
+      : 8080;
 
   // The SDK wants a dotted IPv4, and it throws on anything else. A name such
   // as "localhost" is what a preview server usually passes, so map it back.

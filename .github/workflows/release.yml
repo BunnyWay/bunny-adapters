@@ -25,8 +25,17 @@ jobs:
           cache: npm
           registry-url: https://registry.npmjs.org
 
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
       - run: npm ci
       - run: npm run build
+
+      # CI is a separate workflow on the same event, so a red CI cannot
+      # stop this job. Run the tiers here instead, and publish nothing
+      # that has not passed them.
+      - run: npm run test:all
 
       # Opens a release pull request while changesets are pending.
       # Publishes to npm once that pull request merges.

@@ -379,6 +379,8 @@ bunny-astro upload    Upload the client build only
   --host <hostname>  Storage endpoint            (env: BUNNY_STORAGE_HOST)
   --key <password>   Storage write password      (env: BUNNY_STORAGE_KEY)
   --script <id>      Edge Script to deploy to    (default: the linked one)
+  --outfile <path>   Bundle to deploy            (default: from the build)
+  --concurrency <n>  Parallel uploads            (default: 8)
   --delete-stale     Remove objects the build no longer produces
   --dry-run          List what would happen, and change nothing
 ```

@@ -29,6 +29,14 @@ export interface LocalZone {
   zone: string;
   /** Endpoint to give the script, scheme included. */
   host: string;
+  /**
+   * Every path this zone was asked for, in order.
+   *
+   * A test can then prove what the script asked Storage for, and not only
+   * what the visitor got back. That is the difference between "the traversal
+   * found nothing" and "the traversal never left the zone".
+   */
+  readonly requests: readonly string[];
   /** Stop listening. */
   close(): Promise<void>;
 }
@@ -118,9 +126,12 @@ export async function startLocalZone(options: LocalZoneOptions): Promise<LocalZo
   const dir = path.resolve(options.dir);
   const writable = options.writable ?? true;
 
+  const requests: string[] = [];
+
   const server: Server = createServer((request, response) => {
     void (async () => {
       const url = new URL(request.url ?? "/", "http://localhost");
+      requests.push(url.pathname);
       const segments = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
 
       if (segments.shift() !== zone) {
@@ -230,6 +241,7 @@ export async function startLocalZone(options: LocalZoneOptions): Promise<LocalZo
   return {
     zone,
     host: `http://127.0.0.1:${port}`,
+    requests,
     close: () =>
       new Promise<void>((resolve) => {
         server.closeAllConnections?.();

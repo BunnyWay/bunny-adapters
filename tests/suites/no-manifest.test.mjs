@@ -58,6 +58,45 @@ describe("no-manifest", () => {
     assert.ok(!page.body.includes("root:"), "the script read a file outside the zone");
   });
 
+  it("asks Storage for nothing outside the zone, whatever the shape", async () => {
+    // A 404 alone proves only that the traversal found nothing. What matters
+    // is where the script looked, so the zone records every path it was asked
+    // for. `%2e%2e` and `\` are the two the URL parser decodes for itself,
+    // after the path filter has already run.
+    const hostile = [
+      "/_astro/../../../../etc/passwd",
+      "/%2e%2e/%2e%2e/other-zone/secret.json",
+      "/%252e%252e/other-zone/secret.json",
+      "/a/%252e%252e/%252e%252e/other-zone/secret.json",
+      "/..%5c..%5cother-zone/secret.json",
+      "/asset%3Fdownload=1",
+      "/asset%23fragment",
+    ];
+
+    const before = site.zone.requests.length;
+    for (const pathname of hostile) {
+      const page = await site.get(pathname);
+      assert.equal(page.status, 404, `${pathname} answered ${page.status}`);
+    }
+
+    const asked = site.zone.requests.slice(before);
+    assert.ok(asked.length > 0, "no request reached Storage, so nothing was proven");
+    for (const request of asked) {
+      assert.ok(
+        request.startsWith("/fixture/"),
+        `the script asked Storage for ${request}, which is outside the zone`,
+      );
+    }
+  });
+
+  it("refuses a write method on a stored object", async () => {
+    // With no file list the script has to ask Storage first, so this is the
+    // path where the refusal happens after the object is known to be there.
+    const page = await site.get("/robots.txt", { method: "DELETE" });
+    assert.equal(page.status, 405);
+    assert.equal(page.headers.get("allow"), "GET, HEAD");
+  });
+
   it("answers HEAD without a body", async () => {
     const page = await site.get("/about", { method: "HEAD" });
     assert.equal(page.status, 200);
