@@ -1,0 +1,12 @@
+---
+import Counter from "../components/Counter.svelte";
+import Deferred from "../components/Deferred.astro";
+---
+
+<html>
+  <body>
+    <p id="home">home</p>
+    <Counter start={41} client:load />
+    <Deferred server:defer />
+  </body>
+</html>

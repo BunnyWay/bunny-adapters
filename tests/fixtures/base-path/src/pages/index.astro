@@ -1,0 +1,11 @@
+---
+const now = Date.now();
+---
+
+<html>
+  <head><style>body { color: #101010; }</style></head>
+  <body>
+    <p id="rendered-at">{now}</p>
+    <a id="to-about" href={`${import.meta.env.BASE_URL}/about`.replace("//", "/")}>About</a>
+  </body>
+</html>

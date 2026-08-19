@@ -180,10 +180,21 @@ async function fromStorage(pathname: string, method = "GET"): Promise<Response |
 /**
  * Astro calls this to find a prerendered `404.html` or `500.html`. Without it
  * the visitor gets a bare status code, even though the page sits in Storage.
+ *
+ * The 500 page leaves with no caching. Astro reuses these headers on the
+ * response the visitor gets, and a pull zone that caches a 500 hands one
+ * transient failure to everybody who asks for that path. A 404 keeps the page
+ * lifetime, because a missing path stays missing until the next deploy.
  */
 async function prerenderedErrorPageFetch(url: string): Promise<Response> {
-  const response = await fromStorage(new URL(url).pathname);
+  const { pathname } = new URL(url);
+  const response = await fromStorage(pathname);
   if (!response) throw new Error(`No prerendered error page for ${url}`);
+
+  const local = stripBase(pathname, options.base) ?? pathname;
+  if (/\/500(\.html|\/index\.html)?$/.test(local)) {
+    response.headers.set("cache-control", options.serverCacheControl);
+  }
   return response;
 }
 
