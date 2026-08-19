@@ -4,32 +4,53 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: 22
 
 jobs:
-  test:
+  check:
+    name: Types, format, unit tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+      - run: npm run check
+      - run: npm run format:check
+      - run: npm run test --workspaces --if-present
+      - run: npm run lint:package
+
+  e2e:
+    name: End to end on Deno
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
 
-      - name: Install and build the adapter
-        run: |
-          npm install
-          npm run build
+      - run: npm ci
+      - run: npm run build
 
-      - name: Install the fixture against the built adapter
-        working-directory: test/fixture
-        run: |
-          npm install
-          npm install ../..
-
-      - name: Smoke test
-        run: npm test
+      # Builds the showcase, serves dist/client from a local Storage
+      # emulator, runs the bundle on Deno, and asserts every route.
+      # No bunny.net credential is needed.
+      - run: node tests/e2e.mjs

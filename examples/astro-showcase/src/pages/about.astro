@@ -1,0 +1,37 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+// This page has no per-request part, so it is built once and read from Bunny
+// Storage. The script never renders it.
+export const prerender = true;
+
+const builtAt = new Date().toISOString();
+---
+
+<Layout
+  title="A prerendered page"
+  lede="Built once, stored in Bunny Storage, and served without waking the renderer."
+  badge="prerender = true"
+>
+  <div class="card">
+    <table>
+      <tbody>
+        <tr>
+          <th>Built at</th>
+          <td class="value" id="built-at">{builtAt}</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="margin: 0.9rem 0 0; color: var(--muted); font-size: 0.92rem" id="prerendered">
+      This timestamp never changes, however often you reload. It was written while the site was
+      being built.
+    </p>
+  </div>
+
+  <h2>How the script finds it</h2>
+  <p>
+    The build writes <code>dist/client/about/index.html</code>, and
+    <code>bunny-astro deploy</code> uploads it. The adapter inlines the list of built files into the script,
+    so a request for <code>/about</code> becomes one read and a miss becomes none at all.
+  </p>
+</Layout>

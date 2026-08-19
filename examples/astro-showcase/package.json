@@ -1,0 +1,18 @@
+{
+  "name": "@bunny.net/astro-showcase",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Every capability of the bunny.net Astro adapter, on one site. Also the end-to-end fixture.",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "deploy": "bunny-astro deploy",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@bunny.net/astro-adapter": "*",
+    "astro": "^7.2.3"
+  }
+}

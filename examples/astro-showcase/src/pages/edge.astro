@@ -1,0 +1,72 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+// The adapter puts the edge context on Astro.locals.runtime. Add the types to
+// your project with the block in src/env.d.ts.
+const runtime = Astro.locals.runtime;
+
+const rows: [string, string][] = [
+  ["Astro.clientAddress", Astro.clientAddress || "unknown"],
+  ["runtime.country", runtime?.country ?? "unknown"],
+  ["runtime.requestId", runtime?.requestId ?? "none"],
+  ["Astro.url", Astro.url.toString()],
+  ["User agent", Astro.request.headers.get("user-agent") ?? "none"],
+];
+
+// Everything the bunny.net network adds to the request. These only exist on
+// the real network, so the list is empty when you run the site yourself.
+const edgeHeaders = [...Astro.request.headers.entries()]
+  .filter(([name]) => name.startsWith("cdn-"))
+  .sort();
+---
+
+<Layout
+  title="Edge context"
+  lede="What the bunny.net network tells the script about a request."
+  badge="Astro.locals.runtime"
+>
+  <div class="card">
+    <table>
+      <tbody>
+        {
+          rows.map(([label, value]) => (
+            <tr>
+              <th>{label}</th>
+              <td class="value" id={label.toLowerCase().replace(/[^a-z]+/g, "-")}>
+                {value}
+              </td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Every edge header on this request</h2>
+  <div class="card">
+    {
+      edgeHeaders.length === 0 ? (
+        <p style="margin:0" id="no-edge-headers">
+          None. You are not on the bunny.net network, so nothing added a<code>cdn-</code> header.
+        </p>
+      ) : (
+        <table id="edge-headers">
+          <tbody>
+            {edgeHeaders.map(([name, value]) => (
+              <tr>
+                <th>{name}</th>
+                <td class="value">{value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )
+    }
+  </div>
+
+  <h2>Using it</h2>
+  <pre><code>{`const { country, requestId, clientAddress } = Astro.locals.runtime;
+
+// Keep working after the response goes out.
+Astro.locals.runtime.waitUntil(recordVisit(country));`}</code></pre>
+</Layout>

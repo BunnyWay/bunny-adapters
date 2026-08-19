@@ -1,0 +1,33 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+const previous = Number(Astro.cookies.get("visits")?.value ?? 0);
+const visits = previous + 1;
+
+Astro.cookies.set("visits", String(visits), {
+  path: "/",
+  httpOnly: true,
+  sameSite: "lax",
+  maxAge: 60 * 60 * 24,
+});
+---
+
+<Layout
+  title="Cookies"
+  lede="Astro.cookies works as it does on any server, once the pull zone stops stripping the header."
+  badge="Astro.cookies"
+>
+  <div class="card">
+    <p style="margin: 0">
+      You have loaded this page <strong id="count">{visits}</strong>
+      {visits === 1 ? "time" : "times"}.
+    </p>
+  </div>
+
+  <h2>One setting to check</h2>
+  <p>
+    A pull zone created for an Edge Script has <strong>Disable cookies</strong> switched on, and it strips
+    <code>Set-Cookie</code> from every response. Turn it off, or the counter never moves:
+  </p>
+  <pre><code>bunny api POST /pullzone/&lt;pull-zone-id&gt; --body '&#123;"DisableCookies": false&#125;'</code></pre>
+</Layout>

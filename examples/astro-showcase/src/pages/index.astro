@@ -1,0 +1,58 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+const renderedAt = new Date().toISOString();
+
+const pages = [
+  { href: "/edge", title: "Edge context", note: "Country, request id, and visitor IP" },
+  { href: "/counter", title: "Cookies", note: "Astro.cookies.get and set" },
+  { href: "/session", title: "Sessions", note: "Stored in a Bunny Storage zone" },
+  { href: "/gallery", title: "Images", note: "Resized by Bunny Optimizer" },
+  { href: "/cached", title: "Caching", note: "routeRules, Cache-Control, CDN-Tag" },
+  { href: "/blog/hello-edge", title: "Dynamic route", note: "One page, many URLs" },
+  { href: "/about", title: "Prerendered page", note: "Served from Bunny Storage" },
+  { href: "/api/hello", title: "Endpoint", note: "A JSON API route" },
+];
+---
+
+<Layout
+  title="Astro on bunny.net Edge Scripting"
+  lede="This site renders on the bunny.net network, close to you. Every page below demonstrates one thing the adapter does, and every page is also a test."
+  badge="Server rendered"
+>
+  <div class="card">
+    <table>
+      <tbody>
+        <tr>
+          <th>Rendered at</th>
+          <td class="value" id="rendered-at">{renderedAt}</td>
+        </tr>
+        <tr>
+          <th>Your country</th>
+          <td class="value" id="country">{Astro.locals.country}</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="margin: 0.9rem 0 0; color: var(--muted); font-size: 0.92rem">
+      Reload the page. The timestamp changes every time, because the page is rendered for each
+      request and not read from a cache.
+    </p>
+  </div>
+
+  <h2>What to look at</h2>
+  <div class="grid">
+    {
+      pages.map((page) => (
+        <a class="tile" href="{page.href}">
+          <strong>{page.title}</strong>
+          <span>{page.note}</span>
+        </a>
+      ))
+    }
+  </div>
+
+  <h2>Deploy one like it</h2>
+  <pre><code>npx astro add @bunny.net/astro-adapter
+npm run build
+npx bunny-astro deploy</code></pre>
+</Layout>

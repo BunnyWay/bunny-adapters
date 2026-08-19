@@ -1,0 +1,61 @@
+---
+import { Image, Picture } from "astro:assets";
+import Layout from "../layouts/Layout.astro";
+import landscape from "../assets/landscape.png";
+---
+
+<Layout
+  title="Images"
+  lede="Bunny Optimizer resizes and re-encodes at the edge, from query parameters on the image's own URL."
+  badge="Bunny Optimizer"
+>
+  <div class="card">
+    <Image
+      id="hero"
+      src={landscape}
+      widths={[360, 720, 1080]}
+      sizes="(max-width: 720px) 100vw, 720px"
+      alt="A generated gradient, resized by Bunny Optimizer"
+    />
+    <p style="margin:0.9rem 0 0;color:var(--muted);font-size:0.92rem">
+      Look at this image's <code>srcset</code>. Each entry is the same file with a different <code
+        >width</code
+      >, and nothing was resized while the site was built.
+    </p>
+  </div>
+
+  <h2>Modern formats</h2>
+  <div class="card">
+    <Picture
+      id="formats"
+      src={landscape}
+      formats={["avif", "webp"]}
+      width={720}
+      alt="The same image, offered as AVIF and WebP"
+    />
+  </div>
+
+  <h2>Without the component</h2>
+  <p>
+    Optimizer works on any URL the pull zone serves, so a plain
+    <code>&lt;img&gt;</code> can use it too:
+  </p>
+  <div class="card">
+    <img
+      id="plain"
+      src="/square.png?width=320&format=webp&quality=80"
+      width="320"
+      height="320"
+      alt="A public image, resized by query parameters"
+      loading="lazy"
+    />
+    <pre
+      style="margin:1rem 0 0"><code>&lt;img src="/square.png?width=320&amp;format=webp&amp;quality=80" /&gt;</code></pre>
+  </div>
+
+  <h2>Turn it on first</h2>
+  <p>
+    Bunny Optimizer is a paid pull zone feature, so the adapter never enables it for you. Without it
+    the parameters are ignored, and the original image is served.
+  </p>
+</Layout>

@@ -1,0 +1,39 @@
+---
+import Layout from "../../layouts/Layout.astro";
+
+const { slug } = Astro.params;
+
+const posts: Record<string, { title: string; body: string }> = {
+  "hello-edge": {
+    title: "Hello from the edge",
+    body: "This page has no file of its own. Astro matched the URL to src/pages/blog/[slug].astro and rendered it inside the Edge Script.",
+  },
+  "why-storage": {
+    title: "Why the assets live in Storage",
+    body: "An Edge Script is one JavaScript file with no disk beside it. So the build's hashed assets and prerendered pages go to a Bunny Storage zone, and the script reads them from there.",
+  },
+};
+
+const post = slug ? posts[slug] : undefined;
+if (!post) return Astro.rewrite("/404");
+---
+
+<Layout title={post.title} badge="Dynamic route" lede={`/blog/${slug}`}>
+  <div class="card">
+    <p style="margin:0" id="post-body">{post.body}</p>
+  </div>
+
+  <h2>Other posts</h2>
+  <ul>
+    {
+      Object.entries(posts)
+        .filter(([key]) => key !== slug)
+        .map(([key, other]) => (
+          <li>
+            <a href={`/blog/${key}`}>{other.title}</a>
+          </li>
+        ))
+    }
+    <li><a href="/blog/missing">A post that does not exist</a> — try it</li>
+  </ul>
+</Layout>
