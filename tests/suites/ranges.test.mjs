@@ -107,6 +107,28 @@ describe("ranges", () => {
     assert.equal(part.bytes.length, 0);
   });
 
+  it("refuses every method but GET and HEAD", async () => {
+    // A stored object is read-only. Answering 200 with the whole file to a
+    // DELETE is wrong, and it spends origin bandwidth on a request that should
+    // have cost one header.
+    for (const method of ["POST", "PUT", "DELETE", "PATCH", "OPTIONS"]) {
+      const page = await site.get("/big.bin", { method });
+      assert.equal(page.status, 405, `${method} answered ${page.status}`);
+      assert.equal(page.headers.get("allow"), "GET, HEAD");
+      assert.equal(page.body, "");
+    }
+  });
+
+  it("still lets an unknown path reach the 404 page, whatever the method", async () => {
+    // The refusal must come after the object is known to be there. Otherwise a
+    // POST to any unknown path answers 405 instead of the site's own 404.
+    const page = await site.get("/nothing-is-here", {
+      method: "POST",
+      headers: { accept: "text/html" },
+    });
+    assert.equal(page.status, 404);
+  });
+
   it("serves the whole object for a range header it does not understand", async () => {
     const part = await fetchRange(site.baseUrl, "/big.bin", { range: "pages=1-2" });
     assert.equal(part.status, 200);

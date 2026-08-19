@@ -7,7 +7,7 @@
  *
  * @see https://bunny.net/docs/storage/http
  */
-import { storageBase } from "./paths.js";
+import { encodeObjectPath, storageBase } from "./paths.js";
 
 export interface StorageConfig {
   /** Zone name, for example `my-site-assets`. */
@@ -39,6 +39,24 @@ export function createStorage(config: StorageConfig): StorageClient {
   const base = config.zone ? `${storageBase(config.host)}/${config.zone}` : "";
   const headers = config.key ? { AccessKey: config.key } : undefined;
 
+  /** The URL for one object. Every caller goes through this, so nothing skips
+   * the encoding that keeps a request inside the zone. */
+  const urlFor = (object: string): string => `${base}/${encodeObjectPath(object)}`;
+
+  // A refused zone breaks every request, so the cause is worth one line. Say it
+  // once per isolate; repeating it on every request would bury the rest of the
+  // log without adding anything.
+  let refusalReported = false;
+  const reportRefusal = (status: number, object: string): void => {
+    if (refusalReported) return;
+    refusalReported = true;
+    console.error(
+      `Bunny Storage answered ${status} for "${object}" in zone "${config.zone}". ` +
+        "Check that BUNNY_STORAGE_KEY is a password of that zone, and that " +
+        "BUNNY_STORAGE_HOST matches its region. Until then every stored path answers 404.",
+    );
+  };
+
   return {
     enabled: Boolean(config.zone),
 
@@ -48,12 +66,18 @@ export function createStorage(config: StorageConfig): StorageClient {
       const request = new Headers(forward);
       if (config.key) request.set("AccessKey", config.key);
 
-      const response = await fetch(`${base}/${object}`, { headers: request });
+      const response = await fetch(urlFor(object), { headers: request });
 
       // 206 is already ok. The other two say the object is there and the
       // request asked for something particular about it, so both are answers
       // the visitor should get rather than a miss.
       if (response.ok || response.status === 304 || response.status === 416) return response;
+
+      // A 401 or a 403 is a broken configuration, not a missing object. The
+      // visitor still gets a 404, because there is nothing else to give them.
+      if (response.status === 401 || response.status === 403) {
+        reportRefusal(response.status, object);
+      }
 
       // Drain the body. An unread body holds the connection open, and the
       // isolate has a small subrequest budget.
@@ -63,7 +87,7 @@ export function createStorage(config: StorageConfig): StorageClient {
 
     async put(object, body, type = "application/octet-stream") {
       if (!base) throw new Error("No storage zone is configured.");
-      const response = await fetch(`${base}/${object}`, {
+      const response = await fetch(urlFor(object), {
         method: "PUT",
         headers: { ...headers, "Content-Type": type },
         body,
@@ -76,7 +100,7 @@ export function createStorage(config: StorageConfig): StorageClient {
 
     async delete(object) {
       if (!base) return false;
-      const response = await fetch(`${base}/${object}`, { method: "DELETE", headers });
+      const response = await fetch(urlFor(object), { method: "DELETE", headers });
       await response.body?.cancel();
       return response.ok;
     },

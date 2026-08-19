@@ -10,6 +10,7 @@
 import { spawn } from "node:child_process";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
+import { encodeObjectPath } from "../runtime/paths.js";
 
 const USAGE = `bunny-astro <command> [options]
 
@@ -55,6 +56,17 @@ function parseArgs(argv: string[]): Args {
     const i = argv.indexOf(flag);
     return i === -1 ? undefined : argv[i + 1];
   };
+
+  // A value that is not a whole number of 1 or more would leave `pool()` with
+  // no workers. That uploads nothing and still reports success, which is worse
+  // than stopping here: `deploy` would then ship a script against the previous
+  // build's assets.
+  const rawConcurrency = get("--concurrency");
+  const concurrency = rawConcurrency === undefined ? 8 : Number(rawConcurrency);
+  if (!Number.isInteger(concurrency) || concurrency < 1) {
+    fail(`--concurrency must be a whole number of 1 or more, not "${rawConcurrency}".`);
+  }
+
   return {
     dir: get("--dir") ?? "dist/client",
     zone: get("--zone") ?? process.env.BUNNY_STORAGE_ZONE ?? "",
@@ -62,7 +74,7 @@ function parseArgs(argv: string[]): Args {
     key: get("--key") ?? process.env.BUNNY_STORAGE_KEY ?? "",
     script: get("--script") ?? process.env.BUNNY_SCRIPT_ID ?? "",
     outfile: get("--outfile") ?? "",
-    concurrency: Number(get("--concurrency") ?? 8),
+    concurrency,
     deleteStale: argv.includes("--delete-stale"),
     dryRun: argv.includes("--dry-run"),
   };
@@ -79,6 +91,17 @@ function baseUrl(args: Args): string {
   return `${scheme}${host}/${args.zone}`;
 }
 
+/**
+ * The URL for one object in the zone.
+ *
+ * The path comes from the local file system, so it can hold a character that
+ * means something else in a URL. A `#` would truncate it, and a `?` would turn
+ * the rest into a query string, so the upload would land under the wrong name.
+ */
+function objectUrl(args: Args, object: string): string {
+  return `${baseUrl(args)}/${encodeObjectPath(object)}`;
+}
+
 async function listFiles(dir: string, base = dir): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true });
   const files = await Promise.all(
@@ -93,7 +116,7 @@ async function listFiles(dir: string, base = dir): Promise<string[]> {
 
 /** Every object already in the zone, under `prefix`. */
 async function listZone(args: Args, prefix = ""): Promise<string[]> {
-  const response = await fetch(`${baseUrl(args)}/${prefix}`, {
+  const response = await fetch(objectUrl(args, prefix), {
     headers: { AccessKey: args.key, Accept: "application/json" },
   });
   if (!response.ok) return [];
@@ -113,7 +136,7 @@ async function listZone(args: Args, prefix = ""): Promise<string[]> {
 
 async function upload(args: Args, relative: string): Promise<void> {
   const body = await readFile(path.join(args.dir, relative));
-  const url = `${baseUrl(args)}/${relative}`;
+  const url = objectUrl(args, relative);
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     const response = await fetch(url, {
@@ -192,7 +215,7 @@ async function removeStale(args: Args, keep: Set<string>): Promise<void> {
 
   console.log(`Deleting ${stale.length} stale object(s)`);
   await pool(stale, args.concurrency, async (object) => {
-    const response = await fetch(`${baseUrl(args)}/${object}`, {
+    const response = await fetch(objectUrl(args, object), {
       method: "DELETE",
       headers: { AccessKey: args.key },
     });

@@ -112,6 +112,12 @@ export async function serveFixture(name, { env = {}, ...options } = {}) {
   if (!built.hasBundle()) throw new Error(`The "${name}" fixture built no bundle.`);
 
   const zone = await startLocalZone({ dir: path.join(built.dist, "client"), zone: "fixture" });
+  // Sessions never touch dist/client. That folder is what a deploy uploads,
+  // so a session written by a test must not end up looking like an asset.
+  const sessions = await startLocalZone({
+    dir: path.join(built.dist, ".test-sessions"),
+    zone: "fixture-sessions",
+  });
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
 
@@ -124,7 +130,8 @@ export async function serveFixture(name, { env = {}, ...options } = {}) {
       BUNNY_STORAGE_ZONE: zone.zone,
       BUNNY_STORAGE_HOST: zone.host,
       BUNNY_STORAGE_KEY: "fixture",
-      BUNNY_SESSION_ZONE: zone.zone,
+      BUNNY_SESSION_ZONE: sessions.zone,
+      BUNNY_SESSION_HOST: sessions.host,
       BUNNY_SESSION_KEY: "fixture",
       ...env,
     },
@@ -138,7 +145,7 @@ export async function serveFixture(name, { env = {}, ...options } = {}) {
 
   const close = async () => {
     server.kill();
-    await zone.close();
+    await Promise.all([zone.close(), sessions.close()]);
   };
 
   try {
@@ -161,7 +168,7 @@ export async function serveFixture(name, { env = {}, ...options } = {}) {
     return { status: response.status, headers: response.headers, body, response };
   };
 
-  return { ...built, baseUrl, get, stderr: () => stderr, close };
+  return { ...built, baseUrl, get, zone, stderr: () => stderr, close };
 }
 
 /** The text inside the element with this id. Enough for a fixture page. */

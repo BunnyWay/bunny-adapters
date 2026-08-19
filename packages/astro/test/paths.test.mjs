@@ -4,6 +4,7 @@ import {
   normalizeBase,
   objectCandidates,
   resolveObject,
+  encodeObjectPath,
   storageBase,
   stripBase,
   toObjectPath,
@@ -29,6 +30,19 @@ describe("toObjectPath", () => {
     assert.equal(toObjectPath("/a/./b"), "a/b");
     // The encoded form is the one a scanner actually sends.
     assert.equal(toObjectPath("/%2e%2e/%2e%2e/etc/passwd"), "etc/passwd");
+  });
+
+  it("treats a backslash as a separator, because the URL parser does", () => {
+    assert.equal(toObjectPath("/..\\..\\etc/passwd"), "etc/passwd");
+    assert.equal(toObjectPath("/a\\b"), "a/b");
+    // Encoded once by the browser, decoded once here.
+    assert.equal(toObjectPath("/..%5c..%5cetc/passwd"), "etc/passwd");
+  });
+
+  it("leaves a double-encoded traversal as one literal segment", () => {
+    // One decode gives `%2e%2e`, which is not `..`, so it stays a name. What
+    // stops it reaching another zone is encodeObjectPath, below.
+    assert.equal(toObjectPath("/%252e%252e/other-zone/x"), "%2e%2e/other-zone/x");
   });
 
   it("returns an empty string for the site root", () => {
@@ -77,6 +91,64 @@ describe("resolveObject", () => {
   it("returns null for something the build never made", () => {
     assert.equal(resolveObject("/nothing", assets), null);
     assert.equal(resolveObject("/_astro/gone.css", assets), null);
+  });
+});
+
+describe("encodeObjectPath", () => {
+  /** What the script would actually ask Bunny Storage for. */
+  const asked = (pathname) => new URL(encodeObjectPath(toObjectPath(pathname)), "https://s/zone/");
+
+  it("leaves an ordinary object path alone", () => {
+    assert.equal(encodeObjectPath("_astro/app.BX-Yz.css"), "_astro/app.BX-Yz.css");
+    assert.equal(encodeObjectPath("about/index.html"), "about/index.html");
+  });
+
+  it("keeps the separators, and encodes everything else", () => {
+    assert.equal(encodeObjectPath("my folder/a.png"), "my%20folder/a.png");
+    assert.equal(encodeObjectPath("a/b?c#d"), "a/b%3Fc%23d");
+  });
+
+  it("keeps a double-encoded traversal inside the zone", () => {
+    // Unencoded, the URL parser reads `%2e%2e` as a level up, and the request
+    // leaves the zone with the zone password attached.
+    assert.equal(
+      asked("/%252e%252e/other-zone/secret").pathname,
+      "/zone/%252e%252e/other-zone/secret",
+    );
+    assert.equal(
+      asked("/a/%252e%252e/%252e%252e/other-zone/secret").pathname,
+      "/zone/a/%252e%252e/%252e%252e/other-zone/secret",
+    );
+  });
+
+  it("keeps a backslash traversal inside the zone", () => {
+    assert.equal(asked("/..%5c..%5cother-zone/secret").pathname, "/zone/other-zone/secret");
+  });
+
+  it("cannot start a query string on the storage request", () => {
+    const url = asked("/asset%3Fdownload=1");
+    assert.equal(url.search, "");
+    assert.equal(url.pathname, "/zone/asset%3Fdownload%3D1");
+  });
+
+  it("never leaves the zone prefix, whatever it is given", () => {
+    const hostile = [
+      "/%252e%252e/other-zone/secret",
+      "/..%5c..%5cother-zone/secret",
+      "/%2e%2e/%2e%2e/other-zone/secret",
+      "/../../etc/passwd",
+      "/a/%252e%252e/%252e%252e/../../x",
+      "/%c0%af%c0%af/x",
+      "/asset%3Fdownload=1",
+      "/asset%23fragment",
+    ];
+    for (const pathname of hostile) {
+      const url = asked(pathname);
+      assert.ok(
+        url.pathname.startsWith("/zone/"),
+        `${pathname} reached ${url.href}, which is outside the zone`,
+      );
+    }
   });
 });
 

@@ -29,10 +29,10 @@ import { runChecks } from "./runner.mjs";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
 
-const GREEN = "[32m";
-const RED = "[31m";
-const DIM = "[2m";
-const RESET = "[0m";
+const GREEN = "\u001b[32m";
+const RED = "\u001b[31m";
+const DIM = "\u001b[2m";
+const RESET = "\u001b[0m";
 
 /** How long the network takes to pick up a pull zone change. */
 const SETTLE_MS = Number(process.env.OPTIMIZER_SETTLE_MS ?? 45_000);

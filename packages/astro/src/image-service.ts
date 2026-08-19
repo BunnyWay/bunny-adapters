@@ -44,15 +44,20 @@ function isRemote(src: string): boolean {
   return /^(https?:)?\/\//i.test(src) || src.startsWith("data:");
 }
 
+/** Optimizer reads 1 to 100, so anything outside that is brought back in. */
+function clampQuality(value: number): number {
+  return Math.min(100, Math.max(1, Math.round(value)));
+}
+
 function toQuality(quality: ImageTransform["quality"], fallback?: number): number | undefined {
-  if (typeof quality === "number") return quality;
+  if (typeof quality === "number") return clampQuality(quality);
   if (typeof quality === "string") {
     const preset = QUALITY_PRESETS[quality];
     if (preset) return preset;
     const parsed = Number.parseInt(quality, 10);
-    if (Number.isFinite(parsed)) return parsed;
+    if (Number.isFinite(parsed)) return clampQuality(parsed);
   }
-  return fallback;
+  return fallback === undefined ? undefined : clampQuality(fallback);
 }
 
 /**
@@ -76,9 +81,13 @@ function makeService(): ExternalImageService<BunnyImageServiceConfig> {
   return {
     validateOptions(options, imageConfig) {
       const max = imageConfig.service.config?.maxWidth ?? DEFAULT_MAX_WIDTH;
-      // A width comes from the page, but it can also come from a crafted URL.
-      // Clamp it, so nobody can ask the Optimizer to render a wall-sized image.
+      // A size comes from the page, but it can also come from a crafted URL.
+      // Clamp both axes, so nobody can ask the Optimizer to render a wall-sized
+      // image. Height matters as much as width: `fit: "cover"` builds its crop
+      // box from the two together, so a clamped width with a free height still
+      // asks for the same number of pixels.
       if (options.width && options.width > max) options.width = max;
+      if (options.height && options.height > max) options.height = max;
       if (options.widths) options.widths = options.widths.filter((width) => width <= max);
       return options;
     },

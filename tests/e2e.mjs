@@ -72,6 +72,11 @@ check("one file, under the 10 MB limit", size < SIZE_LIMIT, `${(size / 1024).toF
 
 // 3 and 4. A storage zone and the bundle on Deno.
 const zone = await startLocalZone({ dir: path.join(dist, "client"), zone: "e2e" });
+// Sessions get a zone of their own, over a folder outside the client build.
+const sessions = await startLocalZone({
+  dir: path.join(dist, ".test-sessions"),
+  zone: "e2e-sessions",
+});
 const port = await freePort();
 const baseUrl = `http://127.0.0.1:${port}`;
 
@@ -85,7 +90,8 @@ const server = spawn("deno", ["run", "-A", bundle], {
     BUNNY_STORAGE_ZONE: zone.zone,
     BUNNY_STORAGE_HOST: zone.host,
     BUNNY_STORAGE_KEY: "e2e",
-    BUNNY_SESSION_ZONE: zone.zone,
+    BUNNY_SESSION_ZONE: sessions.zone,
+    BUNNY_SESSION_HOST: sessions.host,
     BUNNY_SESSION_KEY: "e2e",
   },
 });
@@ -99,8 +105,16 @@ try {
   failures++;
 } finally {
   server.kill();
-  await zone.close();
+  await Promise.all([zone.close(), sessions.close()]);
 }
+
+// The session check above has run by now. dist/client is what a deploy
+// uploads, so a session must never have landed in it.
+console.log("\nafter the run");
+check(
+  "no session was written into the folder a deploy uploads",
+  !existsSync(path.join(dist, "client/_sessions")),
+);
 
 console.log(
   failures === 0

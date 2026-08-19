@@ -1,0 +1,22 @@
+# Keep the actions in .github/workflows current.
+#
+# Without this they go stale quietly. `actions/checkout` sat on v4 through three
+# major releases before anybody noticed, and `changesets/action` v2 renamed every
+# input the release job passes. Dependabot opens a pull request for each bump, CI
+# runs on it, and a breaking major arrives on its own so its notes get read.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      # Routine bumps arrive together. A major stays on its own, because a major
+      # is where a renamed input or a raised runtime hides.
+      actions:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch

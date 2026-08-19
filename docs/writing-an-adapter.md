@@ -38,7 +38,7 @@ packages/<framework>/
 │  ├─ server.ts       the runtime entry, which runs inside the script
 │  ├─ types.ts        the public option types
 │  └─ bin/cli.ts      upload and deploy
-├─ test/*.test.ts     unit tests on the pure helpers, node:test
+├─ test/*.test.mjs    unit tests on the pure helpers, node:test
 ├─ package.json
 ├─ tsconfig.json
 ├─ README.md
