@@ -84,17 +84,36 @@ not have to learn a second set.
 
 ## Tests
 
-Every adapter has an example site in `examples/`, and that site is the fixture.
+There are four tiers. Each one answers a question the tier below it cannot.
 
-- Each capability gets one page and one check.
-- `tests/e2e.mjs` builds the example, starts `tests/storage-emulator.mjs` over
-  its client output, runs the bundle on Deno, and runs the checks.
-- The runner is shared. A new adapter supplies a `checks.mjs` and a build
-  command, and gets the whole harness.
+**Unit tests** (`packages/<framework>/test/*.test.mjs`) cover the pure helpers
+only: path handling, content types, option resolution, URL building. Anything
+that needs a network belongs higher up.
 
-Unit tests cover the pure helpers only: path handling, content types, option
-resolution, URL building. Anything that needs a network belongs in the
-end-to-end tier.
+**The showcase** (`examples/<framework>-showcase`) is one site that uses every
+capability, and `tests/e2e.mjs` proves it. Each capability gets one page and one
+check, so the demo and the suite cannot drift apart. It builds the example,
+serves its client output from `startLocalZone`, runs the bundle on Deno, and
+runs the checks.
+
+**Fixtures** (`tests/fixtures/<name>`, asserted by `tests/suites/*.test.mjs`)
+are one small project per configuration. The showcase proves one configuration
+very well, and a real project changes the configuration: it sets a base path, it
+adds redirects, it turns an option off. Each fixture is a whole Astro project,
+and `serveFixture` in `tests/harness.mjs` builds it and runs it on Deno behind
+the same local zone. A fixture needs no install of its own, because Node walks
+up to the repository's `node_modules`.
+
+Write a fixture whenever a behaviour depends on configuration. Write a showcase
+page when it does not.
+
+**The live tier** (`tests/live.mjs`) is the only one that can prove a pull zone
+feature, and it is the only one that needs a credential. It runs by hand, never
+in continuous integration. When it changes a paid setting, it reads the setting
+first and puts it back at the end, including on Ctrl-C.
+
+The runner is shared across all four. A new adapter supplies a `checks.mjs` and
+a build command, and gets the whole harness.
 
 ## Release
 
