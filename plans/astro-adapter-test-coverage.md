@@ -1,5 +1,62 @@
 # Make the Astro adapter production ready
 
+## Built, 2026-08-19
+
+All of it, and it found a fifth defect and a platform limitation the plan did
+not expect.
+
+### What turned out differently
+
+- **A fourth defect, found by the fixtures.** A prerendered 500 page left with
+  `Cache-Control: public, max-age=60`, so a pull zone cached one transient
+  failure and handed it to everybody. A 500 now leaves with no caching, and a
+  404 keeps the page lifetime.
+- **Bunny Optimizer cannot read from an Edge Script.** The live run was meant to
+  prove Optimizer resizes an image. It proved the opposite: with Optimizer on,
+  every image request that misses the CDN cache answers `523 Origin Connection
+Failed`. Optimizer fetches the original from the pull zone's origin, and a
+  script is not an origin it can read. Reproduced on pull zones 6370161 and
+  6370019, with and without `OptimizerAutomaticOptimizationEnabled`.
+
+  So `imageService: "bunny"` writes the right URLs and nothing serves them. The
+  build now warns, and the README, the option docs, and the guide all say so.
+  The default was already `"noop"`, so no project is affected unless it opted
+  in. This needs a fix on the Optimizer side, not in the adapter.
+
+- **The islands fixture uses Svelte, not the framework we reached for first.**
+  `@astrojs/preact@6.0.3` cannot prerender under `astro@7.2.3`: the prerender
+  entry keeps a bare `astro:preact:opts` import that Node's loader refuses. It
+  fails with no adapter at all, so it is upstream. Svelte works.
+- **Two checks record what Astro decides, not what we assumed.** Astro hands
+  back the 500 page for an endpoint that throws, and it answers 404 at the root
+  of a site with `prefixDefaultLocale`. `astro dev` does both the same way, so
+  neither is ours.
+- **`output: "static"` still builds a server.** The plan expected the adapter's
+  warning to matter. Astro 7 builds a server entry whenever an adapter is set,
+  so a static site gets a working script that reads every page out of Storage.
+  The fixture proves that, and the warning is now the misleading part.
+- **Thirteen fixtures, not twelve.** `runtime` was split out to hold the checks
+  that belong to no single feature.
+
+### What was verified
+
+- `npm run test` — 84 unit tests pass.
+- `node --test tests/suites/*.test.mjs` — 105 fixture tests pass, in 7.6 s.
+- `node tests/e2e.mjs` — the showcase still passes, all 23 checks.
+- `npm run format:check` and `npm run check` are clean.
+- `node tests/live.mjs --optimizer` against `astro-ssr-demo.bunny.run`: all 23
+  showcase checks pass, all 7 Optimizer-off checks pass, and 4 of 7
+  Optimizer-on checks fail with the 523 above. The pull zone ended in the state
+  it started in, both times it ran.
+
+### What is still open
+
+- The Optimizer limitation. The live test is the reproduction, and it turns
+  green on its own when the platform can serve an image from a script.
+- A `Range` request on a stored object still returns the whole object.
+- `Astro.rewrite()` to a prerendered route still throws, which is Astro's own
+  limitation and already in the guide.
+
 ## Why
 
 The adapter has one end-to-end fixture, the showcase. That fixture uses one
