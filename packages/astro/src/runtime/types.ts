@@ -7,6 +7,11 @@
 export interface RuntimeOptions {
   storageZone: string;
   storageHost: string;
+  /**
+   * `config.base`, as `""` or `/prefix`. The script removes it from a request
+   * path before it looks in Storage, because the build has no prefix on disk.
+   */
+  base: string;
   assetCacheControl: string;
   pageCacheControl: string;
   serverCacheControl: string;
@@ -29,6 +34,25 @@ export interface BuildManifest {
    * security policy. Bunny Storage cannot hold them, so the script adds them.
    */
   headers: Record<string, [string, string][]> | null;
+  /**
+   * Prerendered redirects, keyed by the object path Astro wrote for them.
+   *
+   * Astro turns an internal redirect to a prerendered page into a page of its
+   * own. Serving that page would answer 200, and a browser ignores `Location`
+   * on a 200. So the script answers the redirect itself instead.
+   */
+  redirects: Record<string, RedirectEntry> | null;
+}
+
+/** One prerendered redirect. */
+export interface RedirectEntry {
+  /** Where to send the visitor. Astro has already filled in any parameters. */
+  to: string;
+  /**
+   * The status the route configured. `null` means Astro chose it from the
+   * method, which is 301 for `GET` and 308 for anything else.
+   */
+  status: number | null;
 }
 
 /**

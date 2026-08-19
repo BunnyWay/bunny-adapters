@@ -11,7 +11,7 @@ import { createApp } from "astro/app/entrypoint";
 import { setGetEnv } from "astro/env/setup";
 import * as BunnySDK from "@bunny.net/edgescript-sdk";
 import { contentType, isHtml } from "./runtime/mime.js";
-import { objectCandidates, resolveObject } from "./runtime/paths.js";
+import { objectCandidates, resolveObject, stripBase } from "./runtime/paths.js";
 import { createStorage } from "./runtime/storage.js";
 import type { BuildManifest, BunnyRuntime, RuntimeOptions } from "./runtime/types.js";
 
@@ -41,7 +41,7 @@ const options = __BUNNY_ADAPTER_OPTIONS__;
 const build: BuildManifest =
   typeof __BUNNY_BUILD_MANIFEST__ !== "undefined"
     ? __BUNNY_BUILD_MANIFEST__
-    : { assets: null, headers: null };
+    : { assets: null, headers: null, redirects: null };
 
 /**
  * The set of files the build produced. When it is present the script knows
@@ -122,6 +122,32 @@ function fromStorageResponse(object: string, upstream: Response, method: string)
 }
 
 /**
+ * Answer a redirect the build prerendered, or return `null`.
+ *
+ * Astro turns an internal redirect to a prerendered page into a page of its
+ * own, which carries a `Location` header. Serving that page would answer 200,
+ * and a browser ignores `Location` on a 200.
+ */
+function fromRedirects(pathname: string, method: string): Response | null {
+  if (!build.redirects) return null;
+
+  const local = stripBase(pathname, options.base);
+  if (local === null) return null;
+
+  for (const object of objectCandidates(local)) {
+    const entry = build.redirects[object];
+    if (!entry) continue;
+    // Astro's own rule when the route configured no status of its own.
+    const status = entry.status ?? (method === "GET" ? 301 : 308);
+    return new Response(null, {
+      status,
+      headers: { location: entry.to, "cache-control": options.pageCacheControl },
+    });
+  }
+  return null;
+}
+
+/**
  * Read one object for this request path, or return `null`.
  *
  * With the build manifest this makes at most one subrequest, and none at all
@@ -131,13 +157,17 @@ function fromStorageResponse(object: string, upstream: Response, method: string)
 async function fromStorage(pathname: string, method = "GET"): Promise<Response | null> {
   if (!storage.enabled) return null;
 
+  // The build on disk has no `base` prefix, and every request carries one.
+  const local = stripBase(pathname, options.base);
+  if (local === null) return null;
+
   let candidates: string[];
   if (assets) {
-    const object = resolveObject(pathname, assets);
+    const object = resolveObject(local, assets);
     if (!object) return null;
     candidates = [object];
   } else {
-    candidates = objectCandidates(pathname);
+    candidates = objectCandidates(local);
   }
 
   for (const object of candidates) {
@@ -167,8 +197,21 @@ async function prerenderedErrorPageFetch(url: string): Promise<Response> {
  */
 function withCacheControl(response: Response): Response {
   if (response.headers.has("cache-control")) return response;
-  response.headers.set("cache-control", options.serverCacheControl);
-  return response;
+  try {
+    response.headers.set("cache-control", options.serverCacheControl);
+    return response;
+  } catch {
+    // `Response.redirect()` and `Response.error()` give immutable headers, and
+    // Astro builds an external redirect with the first of the two. Writing to
+    // them throws, so copy the response instead of failing the request.
+    const headers = new Headers(response.headers);
+    headers.set("cache-control", options.serverCacheControl);
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  }
 }
 
 /** Handle one request. Exported so it can be tested or wrapped. */
@@ -189,11 +232,17 @@ export async function handle(request: Request): Promise<Response> {
   const routeData = app.match(request);
   if (routeData) return withCacheControl(await app.render(request, { ...render, routeData }));
 
-  // 2. Not an Astro route. Look for an asset or a prerendered page.
-  const stored = await fromStorage(new URL(request.url).pathname, request.method);
+  const { pathname } = new URL(request.url);
+
+  // 2. A redirect the build turned into a page. It answers with its status.
+  const redirect = fromRedirects(pathname, request.method);
+  if (redirect) return redirect;
+
+  // 3. Not an Astro route. Look for an asset or a prerendered page.
+  const stored = await fromStorage(pathname, request.method);
   if (stored) return stored;
 
-  // 3. Nothing matched. Let Astro answer, which reaches back into Storage for
+  // 4. Nothing matched. Let Astro answer, which reaches back into Storage for
   //    a prerendered 404 when the project has one.
   return withCacheControl(await app.render(request, render));
 }

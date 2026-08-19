@@ -4,13 +4,25 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { buildManifest, headersByObject, listFiles } from "../dist/build/manifest.js";
+import { buildManifest, mapsByObject, listFiles } from "../dist/build/manifest.js";
 
 /** Astro's `routeToHeaders`: a map from route pathname to its headers. */
 function routeHeaders(entries) {
   return new Map(
-    entries.map(([pathname, headers]) => [pathname, { headers: new Headers(headers), route: {} }]),
+    entries.map(([pathname, headers, route = {}]) => [
+      pathname,
+      { headers: new Headers(headers), route: { type: "page", ...route } },
+    ]),
   );
+}
+
+/** One prerendered redirect, as Astro hands it over. */
+function redirectRoute(pathname, to, redirect = to) {
+  return [
+    pathname,
+    { location: to },
+    { type: "redirect", redirect, redirectRoute: { pathname: to } },
+  ];
 }
 
 async function fixture(files) {
@@ -42,23 +54,65 @@ describe("listFiles", () => {
   });
 });
 
-describe("headersByObject", () => {
+describe("mapsByObject", () => {
   it("registers both build formats, because either could be on disk", () => {
-    const result = headersByObject(
+    const { headers } = mapsByObject(
       routeHeaders([["/about", { "content-security-policy": "default-src 'self'" }]]),
     );
-    assert.deepEqual(Object.keys(result).sort(), ["about.html", "about/index.html"]);
-    assert.deepEqual(result["about.html"], [["content-security-policy", "default-src 'self'"]]);
+    assert.deepEqual(Object.keys(headers).sort(), ["about.html", "about/index.html"]);
+    assert.deepEqual(headers["about.html"], [["content-security-policy", "default-src 'self'"]]);
   });
 
   it("drops the content type, which the script works out itself", () => {
     // Astro's plain `text/html` would lose the charset the script adds.
-    const result = headersByObject(routeHeaders([["/about", { "content-type": "text/html" }]]));
-    assert.deepEqual(result, {});
+    const { headers } = mapsByObject(routeHeaders([["/about", { "content-type": "text/html" }]]));
+    assert.deepEqual(headers, {});
   });
 
   it("skips a route with no headers", () => {
-    assert.deepEqual(headersByObject(routeHeaders([["/about", {}]])), {});
+    assert.deepEqual(mapsByObject(routeHeaders([["/about", {}]])).headers, {});
+  });
+
+  it("removes the base prefix, which the build never writes to disk", () => {
+    const { headers } = mapsByObject(
+      routeHeaders([["/docs/about", { "x-robots-tag": "noindex" }]]),
+      "/docs",
+    );
+    assert.deepEqual(Object.keys(headers).sort(), ["about.html", "about/index.html"]);
+  });
+
+  it("keeps a pathname that does not start with the base", () => {
+    const { headers } = mapsByObject(
+      routeHeaders([["/about", { "x-robots-tag": "noindex" }]]),
+      "/docs",
+    );
+    assert.deepEqual(Object.keys(headers).sort(), ["about.html", "about/index.html"]);
+  });
+
+  it("pulls a redirect out of the headers, so it is not served as a page", () => {
+    const { headers, redirects } = mapsByObject(routeHeaders([redirectRoute("/old", "/new")]));
+    assert.deepEqual(headers, {});
+    assert.deepEqual(redirects["old/index.html"], { to: "/new", status: null });
+    assert.deepEqual(redirects["old.html"], { to: "/new", status: null });
+  });
+
+  it("keeps the status the route configured", () => {
+    const { redirects } = mapsByObject(
+      routeHeaders([redirectRoute("/gone", "/new", { status: 302, destination: "/new" })]),
+    );
+    assert.equal(redirects["gone/index.html"].status, 302);
+  });
+
+  it("uses the destination Astro resolved, so parameters are already filled in", () => {
+    const { redirects } = mapsByObject(routeHeaders([redirectRoute("/legacy/a", "/new/a")]));
+    assert.equal(redirects["legacy/a/index.html"].to, "/new/a");
+  });
+
+  it("ignores a redirect route with no destination", () => {
+    const { redirects } = mapsByObject(
+      routeHeaders([["/old", {}, { type: "redirect", redirect: "/new" }]]),
+    );
+    assert.deepEqual(redirects, {});
   });
 });
 
@@ -80,9 +134,21 @@ describe("buildManifest", () => {
     assert.equal(manifest.assets, null);
   });
 
-  it("holds no headers when there are none", async () => {
+  it("holds no headers and no redirects when there are none", async () => {
     const dir = await fixture({ "index.html": "a" });
     const manifest = await buildManifest(pathToFileURL(dir + "/"), null, 100);
     assert.equal(manifest.headers, null);
+    assert.equal(manifest.redirects, null);
+  });
+
+  it("inlines the redirects", async () => {
+    const dir = await fixture({ "old/index.html": "a" });
+    const manifest = await buildManifest(
+      pathToFileURL(dir + "/"),
+      routeHeaders([redirectRoute("/old", "/new")]),
+      100,
+    );
+    assert.equal(manifest.headers, null);
+    assert.equal(manifest.redirects["old/index.html"].to, "/new");
   });
 });
