@@ -1,5 +1,82 @@
 # bunny-adapters: monorepo, demo, tests, and Astro adapter v0.2
 
+> **Built, 19 August 2026.** The repository is `BunnyWay/bunny-adapters`. The
+> showcase is deployed at <https://astro-ssr-demo.bunny.run>, and every check
+> passes there. What follows is what the plan got wrong, and what the live run
+> taught us.
+>
+> ## What changed against the design
+>
+> **`imageService: "compile"` was dropped.** The plan listed four modes. On an
+> edge runtime `sharp` cannot run at request time, so `"compile"` would work for
+> a prerendered page and fail for an on-demand one. Shipping a mode that breaks
+> half the time is worse than not having it. The modes are `"noop"` (default),
+> `"bunny"` and `false`.
+>
+> **`astro preview` needs Deno. There is no Node fallback.** The plan said
+> preview would rebuild against the SDK's Node build when Deno was absent. It
+> was built, and it half worked: pages rendered but every server endpoint
+> answered 500, because the Node-conditioned bundle resolves a different
+> `Response`. A preview where API routes fail is a trap, so it was removed. The
+> error message now names the one command that fixes it.
+>
+> **The storage emulator ships in the package.** The plan put it in `tests/`.
+> It ended up at `packages/astro/src/build/local-zone.ts`, exported as
+> `@bunny.net/astro-adapter/local-zone`, because `astro preview` needs the same
+> thing users do. The test runner imports it from the built package. One
+> implementation, two callers.
+>
+> **`i18nDomains` is not declared.** The plan considered it. It is untested, so
+> claiming it would be a lie. The README says so.
+>
+> ## What the live run found
+>
+> Two things that no offline test could have shown.
+>
+> **Smart Cache silently disables `routeRules`.** It is on by default and only
+> caches known static file extensions. HTML is not one, so a cache rule changed
+> nothing: `cdn-cache` was `MISS` on every request and the page was rendered
+> again each time. With `EnableSmartCache: false` the same page went
+> `MISS`, `HIT`, `HIT`, and held its timestamp.
+>
+> **Turning Smart Cache off was unsafe, and that is now fixed.** A pull zone
+> applies its own expiration, thirty days by default, to a response carrying no
+> `Cache-Control`. Astro sets none on an ordinary page. The demo's `/session`
+> page was cached and served to the next visitor. The adapter now sets
+> `private, no-store` on any rendered response that does not set one itself,
+> under the new `serverCacheControl` option. The two facts are documented next
+> to each other, because the first one is unsafe without the second.
+>
+> **`runtime.server` was removed.** It read `cdn-pullzone`, which the CDN adds
+> to the response and not to the request, so it was always undefined. The
+> showcase now lists every `cdn-` header the script actually receives, which is
+> more useful and cannot go stale.
+>
+> **Two checks had to become mode-aware.** The edge writes
+> `cdn-requestcountrycode` and `cdn-requestid` itself, so a live run cannot
+> inject them. Those checks assert the shape of the value live, and the exact
+> value offline.
+>
+> ## What was verified
+>
+> - 69 unit tests, and 24 end-to-end checks offline against the bundle on Deno
+>   behind the local storage zone.
+> - 18 checks against the real deployment, including sessions in a real storage
+>   zone, cookies through a real pull zone, the prerendered 404 out of Storage,
+>   and `routeRules` producing a real `HIT`.
+> - `astro preview` with Deno, and the error message without it.
+> - `publint` and `attw --profile esm-only` clean on the built package.
+> - The bundle is 657 kB, against the 10 MB limit.
+>
+> ## Left for later
+>
+> - Publishing to npm. The package has never been released, so
+>   `npx astro add @bunny.net/astro-adapter` does not work yet. A changeset is
+>   ready and the release workflow needs an `NPM_TOKEN` secret.
+> - Bunny Optimizer is off on the demo pull zone. It is a paid feature, so the
+>   gallery page serves original images until somebody turns it on.
+> - Edge middleware on Bunny's middleware script type. Still out of scope.
+
 ## Context
 
 `BunnyWay/bunny-astro-adapter` holds one adapter in a single-package repo. We
