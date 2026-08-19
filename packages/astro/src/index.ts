@@ -359,8 +359,8 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
         // answers 400 with no body.
         if (needsScript && bytes > START_RISK_SIZE) {
           logger.warn(
-            `${relative} is ${formatSize(bytes)}, and a script this large often fails to start. ` +
-              "The edge then answers 400 with an empty body. Measured in August 2026: the same code " +
+            `${relative} is ${formatSize(bytes)}, and a script has 500 ms to start. Every byte of it is ` +
+              "parsed first, so the edge may answer 400 with an empty body. Measured in August 2026: the same code " +
               "served every request at 7.4 MB, and none at 7.8 MB. Prerender a route, or drop a " +
               "dependency the server does not need.",
           );

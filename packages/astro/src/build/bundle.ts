@@ -60,8 +60,10 @@ export const NODE_BUILTINS = [
 export const SIZE_LIMIT = 10 * 1024 * 1024;
 
 /**
- * Above this, a published script often fails to start, and the edge answers 400
- * with an empty body.
+ * Above this, a published script often misses its 500 ms startup budget, and the
+ * edge answers 400 with an empty body. Every byte of a script is parsed and
+ * evaluated before it answers anything, so the size that fits depends on what
+ * the code does as it loads.
  *
  * Measured in August 2026, on a standalone script in DE, in the units this
  * adapter prints: the same code at 7.44 MB (7,798,944 bytes) served every
