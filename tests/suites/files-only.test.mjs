@@ -37,6 +37,14 @@ describe("files-only", () => {
     assert.ok(site.hasBundle());
   });
 
+  // `noop` is the default because transforming on demand needs `sharp`, which
+  // the edge cannot run. Nothing here renders on demand, so nothing here needs
+  // the default, and the build says so.
+  it("points at sharp, because no route renders on demand", () => {
+    assert.match(site.log, /image\(s\) went into the build untransformed/);
+    assert.match(site.log, /imageService: false/);
+  });
+
   it("prerendered both pages", async () => {
     const files = await site.files();
     assert.ok(files.includes("index.html"));

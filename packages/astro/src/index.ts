@@ -63,6 +63,9 @@ function versionOf(specifier: string, from?: string): string | undefined {
   }
 }
 
+/** Images Astro copied without transforming them, when it had a chance to. */
+const IMAGE_FILE = /\.(?:png|jpe?g|webp|avif|gif|tiff?)$/i;
+
 /** The "what filled it" half of the message for a script above the limit. */
 function largestList(largest: BundleContributor[]): string {
   if (largest.length === 0) return "";
@@ -347,6 +350,21 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
           logger.info(
             `Inlined ${manifest.assets.length} client file(s), so misses cost no lookup.`,
           );
+        }
+
+        // `noop` is the default because a transform on demand needs `sharp`, and
+        // `sharp` needs native binaries the edge does not have. A build with no
+        // route on demand never asks for one, so it can have the real thing and
+        // upload far less. Measured on astro.build: 1.3 GB of images went up
+        // untouched.
+        if (imageService === "noop" && !rendersOnDemand && manifest.assets) {
+          const images = manifest.assets.filter((file) => IMAGE_FILE.test(file)).length;
+          if (images > 0) {
+            logger.info(
+              `${images} image(s) went into the build untransformed. Every route here is prerendered, ` +
+                "so `imageService: false` lets sharp resize them while the site builds, and the deploy carries less.",
+            );
+          }
         }
         if (manifest.redirects) {
           const count = new Set(Object.values(manifest.redirects)).size;

@@ -1,3 +1,11 @@
+---
+import { Image } from "astro:assets";
+import pixel from "../assets/pixel.png";
+---
+
 <html>
-  <body><p id="home">home</p></body>
+  <body>
+    <p id="home">home</p>
+    <Image src={pixel} alt="a pixel" width={1} height={1} />
+  </body>
 </html>

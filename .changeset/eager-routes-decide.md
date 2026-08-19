@@ -30,6 +30,12 @@ A script above the 10 MB limit now fails the build, and says which packages
 filled it. It used to log an error, finish with `Complete!` and exit 0, which let
 `bunny deploy` get as far as creating a site before it stopped.
 
+A build with no route on demand now says how many images it copied without
+transforming, and that `imageService: false` would have `sharp` resize them while
+the site builds. `noop` is the default because transforming on demand needs
+`sharp`, and the edge cannot run it; a site with nothing on demand never asks.
+`withastro/astro.build` uploaded 1.3 GB of untransformed images.
+
 The warning that told you to set `output: "server"` is gone. It was wrong advice:
 on `withastro/astro.build` that setting took the script from 7.83 MB to 22.30 MB,
 and turned 4499 prerendered pages into pages that render per request.
