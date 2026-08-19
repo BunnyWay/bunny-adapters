@@ -122,6 +122,7 @@ anything your code reads from them is absent locally.
 | Prerendered `404.astro` and `500.astro`                      | Yes, served from Storage                                 |
 | `routeRules` and cache purging                               | Yes. [Turn Smart Cache off](#turn-smart-cache-off-first) |
 | Image transformation                                         | [Not yet](#images). Optimizer cannot read a script       |
+| Range requests on a stored object                            | Yes, [see below](#large-files-and-range-requests)        |
 | `node:fs` and the other built-ins Deno provides              | Yes. [See below](#node-built-ins)                        |
 | `astro:env` secrets                                          | Yes, from script environment variables                   |
 | `astro preview`                                              | Yes, with Deno                                           |
@@ -169,6 +170,29 @@ parameters are ignored and the original image is served.
 
 Optimizer only works on files your own pull zone serves, so an image on another
 host passes through untouched.
+
+## Large files and range requests
+
+A stored object can be fetched in pieces. The script answers a `Range` request
+with `206` and a `Content-Range`, and it says `Accept-Ranges: bytes` on every
+object it serves out of Bunny Storage.
+
+That header is the part that matters. A pull zone will not answer a range from
+its cache, and will not slice an object, unless the origin says it accepts
+ranges. Without it a video is only seekable once it is fully cached, and a
+player has to download the whole file to skip ahead.
+
+For a large file that is not cached yet, turn on **Optimize for large object
+delivery** in the pull zone's caching settings. It fetches the object in chunks,
+so the first request is seekable too:
+
+```bash
+bunny api POST /pullzone/<pull-zone-id> --body '{"EnableCacheSlice": true}'
+```
+
+The script also passes `If-None-Match` and `If-Modified-Since` through, so a
+browser and the pull zone both revalidate with a `304` instead of downloading
+the object again.
 
 ## Sessions
 

@@ -95,18 +95,55 @@ function runtimeContext(request: Request): BunnyRuntime {
 
 const app = createApp();
 
+/**
+ * Request headers that change which bytes of an object come back.
+ *
+ * Bunny Storage answers all of them, so they are passed straight through. That
+ * is what makes the script a range-capable origin: without it a pull zone has
+ * to treat every object as one blob, and a large file is only seekable once it
+ * is fully cached.
+ */
+const FETCH_REFINING_HEADERS = ["range", "if-range", "if-none-match", "if-modified-since"];
+
+/** The subset of a request's headers that Storage should see. */
+function refiningHeaders(request: Request): Headers {
+  const forward = new Headers();
+  for (const name of FETCH_REFINING_HEADERS) {
+    const value = request.headers.get(name);
+    if (value) forward.set(name, value);
+  }
+  return forward;
+}
+
+/** A response with no body of its own, whatever the object holds. */
+function isBodyless(status: number): boolean {
+  return status === 304 || status === 416;
+}
+
 /** Turn a Storage response into the response the visitor gets. */
 function fromStorageResponse(object: string, upstream: Response, method: string): Response {
   const type = contentType(object);
   const headers = new Headers({
     "content-type": type,
     "cache-control": isHtml(type) ? options.pageCacheControl : options.assetCacheControl,
+    // Say the object can be fetched in pieces. A pull zone will not slice an
+    // object, and will not answer a range from its cache, unless the origin
+    // says it may.
+    "accept-ranges": "bytes",
   });
 
-  // Let the pull zone and the browser revalidate instead of re-downloading.
-  for (const name of ["etag", "last-modified"]) {
+  // Let the pull zone and the browser revalidate instead of re-downloading,
+  // and let them ask for one piece at a time.
+  for (const name of ["etag", "last-modified", "content-range"]) {
     const value = upstream.headers.get(name);
     if (value) headers.set(name, value);
+  }
+
+  // Only when the body arrives as it is stored. A decompressed body is a
+  // different length from the one the header names.
+  if (!upstream.headers.get("content-encoding")) {
+    const length = upstream.headers.get("content-length");
+    if (length) headers.set("content-length", length);
   }
 
   // Headers Astro asked for on this prerendered page, such as a CSP.
@@ -114,11 +151,17 @@ function fromStorageResponse(object: string, upstream: Response, method: string)
     headers.set(name, value);
   }
 
-  if (method === "HEAD") {
+  // 206 and the two bodyless answers are the visitor's, and anything else that
+  // got this far is a whole object.
+  const status = upstream.status === 206 || isBodyless(upstream.status) ? upstream.status : 200;
+
+  if (method === "HEAD" || isBodyless(status)) {
     void upstream.body?.cancel();
-    return new Response(null, { status: 200, headers });
+    // A 304 must not name a length, because it describes no body.
+    if (status === 304) headers.delete("content-length");
+    return new Response(null, { status, headers });
   }
-  return new Response(upstream.body, { status: 200, headers });
+  return new Response(upstream.body, { status, headers });
 }
 
 /**
@@ -154,7 +197,11 @@ function fromRedirects(pathname: string, method: string): Response | null {
  * for a path the build never produced. Without it, a path with no extension
  * costs two, because the page may be `<route>/index.html` or `<route>.html`.
  */
-async function fromStorage(pathname: string, method = "GET"): Promise<Response | null> {
+async function fromStorage(
+  pathname: string,
+  method = "GET",
+  forward?: Headers,
+): Promise<Response | null> {
   if (!storage.enabled) return null;
 
   // The build on disk has no `base` prefix, and every request carries one.
@@ -171,7 +218,7 @@ async function fromStorage(pathname: string, method = "GET"): Promise<Response |
   }
 
   for (const object of candidates) {
-    const upstream = await storage.get(object);
+    const upstream = await storage.get(object, forward);
     if (upstream) return fromStorageResponse(object, upstream, method);
   }
   return null;
@@ -250,7 +297,7 @@ export async function handle(request: Request): Promise<Response> {
   if (redirect) return redirect;
 
   // 3. Not an Astro route. Look for an asset or a prerendered page.
-  const stored = await fromStorage(pathname, request.method);
+  const stored = await fromStorage(pathname, request.method, refiningHeaders(request));
   if (stored) return stored;
 
   // 4. Nothing matched. Let Astro answer, which reaches back into Storage for
