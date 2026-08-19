@@ -82,7 +82,11 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
               },
             },
           });
-          logger.info("Images go through Bunny Optimizer. Turn Optimizer on for the pull zone.");
+          logger.warn(
+            "Images go through Bunny Optimizer, and Optimizer cannot read from an " +
+              "Edge Script yet. With Optimizer on, an image that misses the CDN cache " +
+              "answers 523. Leave imageService at its default until that is fixed.",
+          );
         } else if (imageService === "noop") {
           // sharp needs native binaries, which cannot run on the edge.
           updateConfig({

@@ -121,7 +121,7 @@ anything your code reads from them is absent locally.
 | `export const prerender = true`                              | Yes, served from Storage                                 |
 | Prerendered `404.astro` and `500.astro`                      | Yes, served from Storage                                 |
 | `routeRules` and cache purging                               | Yes. [Turn Smart Cache off](#turn-smart-cache-off-first) |
-| Image transformation                                         | Yes, with Bunny Optimizer                                |
+| Image transformation                                         | [Not yet](#images). Optimizer cannot read a script       |
 | `node:fs` and the other built-ins Deno provides              | Yes. [See below](#node-built-ins)                        |
 | `astro:env` secrets                                          | Yes, from script environment variables                   |
 | `astro preview`                                              | Yes, with Deno                                           |
@@ -131,6 +131,13 @@ anything your code reads from them is absent locally.
 | i18n domains                                                 | Untested. Tell us if you need it                         |
 
 ## Images
+
+> **Optimizer cannot read from an Edge Script yet.** With Optimizer on, every
+> image request that misses the CDN cache answers `523 Origin Connection
+Failed`. We measured this on two script-backed pull zones in August 2026, and
+> `npm run test:live -- --optimizer` reproduces it. The service below writes the
+> right URLs, and nothing serves them yet. Leave `imageService` at its default
+> until this is fixed.
 
 Set `imageService: "bunny"` to resize and re-encode with
 [Bunny Optimizer](https://bunny.net/docs/optimizer), at the edge, with no build

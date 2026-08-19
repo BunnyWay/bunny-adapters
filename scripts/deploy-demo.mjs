@@ -10,6 +10,9 @@
  *   node scripts/deploy-demo.mjs --verify   then run the checks against the URL
  *   node scripts/deploy-demo.mjs --verify-only   only run the checks
  *
+ * `tests/live.mjs` runs the same checks on their own, and it can also turn
+ * Bunny Optimizer on and off around them.
+ *
  * It needs the bunny CLI, an authenticated profile, and:
  *
  *   BUNNY_SCRIPT          the Edge Script name or id
