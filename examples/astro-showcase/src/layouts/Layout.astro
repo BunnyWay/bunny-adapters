@@ -1,0 +1,81 @@
+---
+import "../styles/global.css";
+
+interface Props {
+  title: string;
+  lede?: string;
+  badge?: string;
+}
+
+const { title, lede, badge } = Astro.props;
+const here = Astro.url.pathname.replace(/\/$/, "") || "/";
+
+const links = [
+  { href: "/", label: "Home" },
+  { href: "/edge", label: "Edge context" },
+  { href: "/counter", label: "Cookies" },
+  { href: "/session", label: "Sessions" },
+  { href: "/gallery", label: "Images" },
+  { href: "/cached", label: "Caching" },
+  { href: "/blog/hello-edge", label: "Dynamic route" },
+  { href: "/about", label: "Prerendered" },
+];
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} · bunny.net Astro adapter</title>
+    <meta
+      name="description"
+      content="A live Astro site on bunny.net Edge Scripting. Every page shows one adapter capability."
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🐰</text></svg>"
+    />
+  </head>
+  <body>
+    <header class="site">
+      <div class="shell">
+        <a class="brand" href="/">bunny<span>.net</span> × Astro</a>
+        <nav class="site">
+          {
+            links.map((link) => (
+              <a href={link.href} aria-current={here === link.href ? "page" : undefined}>
+                {link.label}
+              </a>
+            ))
+          }
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <div class="shell">
+        {
+          badge && (
+            <p>
+              <span class="badge">{badge}</span>
+            </p>
+          )
+        }
+        <h1>{title}</h1>
+        {lede && <p class="lede">{lede}</p>}
+        <slot />
+      </div>
+    </main>
+
+    <footer class="site">
+      <div class="shell">
+        Built with
+        <a href="https://github.com/BunnyWay/bunny-adapters">@bunny.net/astro-adapter</a>. Read the
+        <a href="https://bunny.net/docs/scripting/frameworks/astro">guide</a>, or the
+        <a href="https://github.com/BunnyWay/bunny-adapters/tree/main/examples/astro-showcase"
+          >source of this site</a
+        >.
+      </div>
+    </footer>
+  </body>
+</html>

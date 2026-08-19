@@ -23,13 +23,13 @@ test suite, and an Astro adapter that matches its competitors.
 
 ## Decisions taken
 
-| Decision | Choice |
-| --- | --- |
+| Decision        | Choice                                              |
+| --------------- | --------------------------------------------------- |
 | Repository name | `BunnyWay/bunny-adapters` (GitHub keeps a redirect) |
-| Package manager | npm workspaces (already in use, no new tool) |
-| Scope | Correctness fixes plus the platform features |
-| CI | Local end-to-end only. No credentials, no cost |
-| Demo | One showcase site that is also the test fixture |
+| Package manager | npm workspaces (already in use, no new tool)        |
+| Scope           | Correctness fixes plus the platform features        |
+| CI              | Local end-to-end only. No credentials, no cost      |
+| Demo            | One showcase site that is also the test fixture     |
 
 Edge middleware stays out of scope. It needs a second deploy target.
 
@@ -85,18 +85,18 @@ MIT is correct. It is what Astro, the Astro adapters, and
 The showcase is the fixture. Each page proves one capability, and each page has
 one assertion in `examples/astro-showcase/e2e/checks.mjs`.
 
-| Route | Proves |
-| --- | --- |
-| `/` | Server rendering, per-request output |
-| `/api/hello` | A server endpoint |
-| `/blog/[slug]` | A dynamic route |
-| `/about` | `prerender = true`, read from Storage |
-| `/edge` | `Astro.locals.runtime`, `Astro.clientAddress` |
-| `/counter` | `Astro.cookies.get` and `set` |
-| `/session` | The Bunny Storage session driver |
-| `/gallery` | The Bunny Optimizer image service and `srcset` |
-| `/cached` | `routeRules`, `Cache-Control`, `CDN-Tag` |
-| `404.astro` | The prerendered error page, read from Storage |
+| Route          | Proves                                         |
+| -------------- | ---------------------------------------------- |
+| `/`            | Server rendering, per-request output           |
+| `/api/hello`   | A server endpoint                              |
+| `/blog/[slug]` | A dynamic route                                |
+| `/about`       | `prerender = true`, read from Storage          |
+| `/edge`        | `Astro.locals.runtime`, `Astro.clientAddress`  |
+| `/counter`     | `Astro.cookies.get` and `set`                  |
+| `/session`     | The Bunny Storage session driver               |
+| `/gallery`     | The Bunny Optimizer image service and `srcset` |
+| `/cached`      | `routeRules`, `Cache-Control`, `CDN-Tag`       |
+| `404.astro`    | The prerendered error page, read from Storage  |
 
 `src/middleware.ts` puts the visitor country into `Astro.locals`.
 
@@ -127,7 +127,7 @@ All in `packages/astro/src/server.ts`, which uses `RenderOptions` from
 - **`waitUntil`.** Pass `Bunny.v1.waitUntil`. Astro's cache providers need it to
   write without blocking the response.
 - **`locals.runtime`.** Give every page `{ country, requestId, clientAddress, waitUntil,
-  caches, env }`, read from `cdn-requestcountrycode`, `cdn-requestid` and the SDK.
+caches, env }`, read from `cdn-requestcountrycode`, `cdn-requestid` and the SDK.
   This matches `Astro.locals.runtime` on Cloudflare. Add an `App.Locals` type.
 - **Asset manifest.** `astro:build:done` knows every file in `dist/client`. Inline
   that list into the bundle. A request then reads Storage once, or not at all,
@@ -143,12 +143,12 @@ All in `packages/astro/src/server.ts`, which uses `RenderOptions` from
 `ExternalImageService`. `getURL` returns the asset path plus Optimizer query
 parameters, and `getSrcSet` generates the widths. The mapping is direct:
 
-| Astro | Optimizer |
-| --- | --- |
-| `width`, `height`, `quality` | `width`, `height`, `quality` |
-| `format` | `format` (`webp`, `jpeg`, `png`, `avif`) |
-| `fit: "cover"` with both sides | `crop=w,h` |
-| `position` | `crop_gravity` |
+| Astro                          | Optimizer                                |
+| ------------------------------ | ---------------------------------------- |
+| `width`, `height`, `quality`   | `width`, `height`, `quality`             |
+| `format`                       | `format` (`webp`, `jpeg`, `png`, `avif`) |
+| `fit: "cover"` with both sides | `crop=w,h`                               |
+| `position`                     | `crop_gravity`                           |
 
 The URL is origin-relative, so the same pull zone serves it and no host setting is
 needed. Remote images pass through untouched, because Optimizer only handles
@@ -182,7 +182,7 @@ gives Astro `routeRules` on bunny.net, which is what Netlify and Vercel offer.
   `dist/client`, then runs the bundle. It uses Deno when Deno is present, because
   Deno is the real runtime. Without Deno it rebuilds the server entry against the
   SDK's Node build with esbuild, and runs that on Node. Either way `astro build &&
-  astro preview` shows the real edge bundle, offline.
+astro preview` shows the real edge bundle, offline.
 - **`bunny-astro deploy`.** One command that uploads `dist/client` and then deploys
   the script. Today that is two commands, and forgetting the first one silently
   breaks the styles. Keep `upload` as it is, and add `--delete-stale` to remove

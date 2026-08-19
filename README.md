@@ -1,174 +1,79 @@
-# @bunny.net/astro-adapter
+<div align="center">
 
-Run [Astro](https://astro.build/) on [bunny.net Edge Scripting](https://bunny.net/docs/scripting).
+# bunny.net adapters
 
-Astro's server renders pages and runs API routes inside the Edge Script, per
-request. The build's client assets and prerendered pages are read from
+**Deploy your favourite web framework to [bunny.net Edge Scripting](https://bunny.net/docs/scripting).**
+
+[![CI](https://github.com/BunnyWay/bunny-adapters/actions/workflows/ci.yml/badge.svg)](https://github.com/BunnyWay/bunny-adapters/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/%40bunny.net%2Fastro-adapter?label=%40bunny.net%2Fastro-adapter)](https://www.npmjs.com/package/@bunny.net/astro-adapter)
+[![licence](https://img.shields.io/badge/licence-MIT-blue)](./LICENSE)
+
+</div>
+
+Edge Scripting runs JavaScript on the bunny.net network, next to your visitors.
+An adapter in this repository builds your framework's server into one file that
+Edge Scripting accepts, and serves the build assets from
 [Bunny Storage](https://bunny.net/docs/storage).
 
 ```
-browser ──▶ pull zone ──▶ Edge Script (Astro SSR)
+browser ──▶ pull zone ──▶ Edge Script (your framework, server-side)
                               │
                               └─ assets and prerendered pages ─▶ Bunny Storage
 ```
 
-## Install
+## Adapters
+
+| Framework                     | Package                                        | Status    | Guide                                                     |
+| ----------------------------- | ---------------------------------------------- | --------- | --------------------------------------------------------- |
+| [Astro](https://astro.build/) | [`@bunny.net/astro-adapter`](./packages/astro) | Available | [Docs](https://bunny.net/docs/scripting/frameworks/astro) |
+| SvelteKit                     | `@bunny.net/svelte-adapter`                    | Planned   | —                                                         |
+| Next.js (OpenNext)            | `@bunny.net/opennext-adapter`                  | Planned   | —                                                         |
+
+Do you want another framework? [Open an
+issue](https://github.com/BunnyWay/bunny-adapters/issues/new/choose) and tell us.
+
+## Quick start
 
 ```bash
-npx astro add @bunny.net/astro-adapter
+npx astro add @bunny.net/astro-adapter   # add the adapter
+npm run build                            # build the edge bundle
+npx bunny-astro deploy                   # upload the assets, deploy the script
 ```
 
-Or set it up yourself:
+The [Astro adapter README](./packages/astro/README.md) has the whole story.
+
+## Examples
+
+[`examples/astro-showcase`](./examples/astro-showcase) is a live Astro site. Every
+page demonstrates one adapter capability, and every page is also a test. Read it
+to see how a feature works, and copy what you need.
 
 ```bash
-npm install @bunny.net/astro-adapter
+npm install
+npm run --workspace examples/astro-showcase dev
 ```
 
-```js
-// astro.config.mjs
-import { defineConfig } from "astro/config";
-import bunny from "@bunny.net/astro-adapter";
+## Repository layout
 
-export default defineConfig({
-  output: "server",
-  adapter: bunny(),
-});
-```
+| Path         | Holds                                                 |
+| ------------ | ----------------------------------------------------- |
+| `packages/*` | One published adapter each                            |
+| `examples/*` | Runnable demo sites, which the test suite drives      |
+| `tests/`     | The shared end-to-end runner and the Storage emulator |
+| `docs/`      | How to write and release an adapter                   |
+| `plans/`     | Design documents for work that is not done yet        |
 
-## Build
+## Contributing
+
+Read [CONTRIBUTING.md](./CONTRIBUTING.md). It covers the local setup, the three
+test tiers, and how a change reaches npm.
 
 ```bash
-astro build
+npm install
+npm test          # unit tests
+npm run test:e2e  # build the showcase and run it on Deno, offline
 ```
-
-The adapter bundles Astro's server output into a single `dist/index.js`, which
-is what Edge Scripting accepts. Your static files stay in `dist/client`.
-
-## Deploy
-
-```bash
-# 1. Client assets and prerendered pages go to the storage zone.
-BUNNY_STORAGE_ZONE=my-site-assets \
-BUNNY_STORAGE_KEY=<write password> \
-npx bunny-astro upload
-
-# 2. The server bundle goes to the Edge Script.
-bunny scripts deploy dist/index.js
-```
-
-Run both on every deploy. Astro renames its CSS and JS bundles whenever they
-change, so deploying only the script leaves the new names missing from storage
-and the site loses its styles.
-
-## Configure the script
-
-The adapter reads its storage settings from the environment at runtime, so no
-password is ever baked into the bundle.
-
-| Variable | Purpose |
-| --- | --- |
-| `BUNNY_STORAGE_ZONE` | The zone holding `dist/client` |
-| `BUNNY_STORAGE_HOST` | The zone's regional endpoint. Defaults to `storage.bunnycdn.com` |
-| `BUNNY_STORAGE_KEY` | The zone's **read-only** password |
-
-```bash
-bunny scripts env set BUNNY_STORAGE_ZONE my-site-assets
-bunny scripts env set BUNNY_STORAGE_HOST storage.bunnycdn.com
-bunny scripts env set BUNNY_STORAGE_KEY <read-only password> --secret
-```
-
-The script only reads files, so give it the read-only password, never the one
-that can write or delete.
-
-## Options
-
-```js
-bunny({
-  storageZone: "my-site-assets",   // default: BUNNY_STORAGE_ZONE at runtime
-  storageHost: "ny.storage.bunnycdn.com", // default: BUNNY_STORAGE_HOST, then storage.bunnycdn.com
-  outfile: "dist/index.js",        // where to write the deployable bundle
-  bundle: true,                    // set false to run your own bundler
-  imageService: "noop",            // set false to keep your own image service
-  assetCacheControl: "public, max-age=31536000, immutable",
-  pageCacheControl: "public, max-age=60",
-});
-```
-
-Every option is optional. `storageZone` and `storageHost` are useful when you
-would rather commit them than set them per environment; the password always
-comes from the environment.
-
-## What works
-
-| Astro feature | Supported |
-| --- | --- |
-| Server-rendered pages | Yes |
-| `src/pages/api/` endpoints | Yes |
-| `src/middleware.ts` | Yes |
-| `Astro.request`, `Astro.locals`, `Astro.url`, `Astro.params` | Yes |
-| `Astro.cookies`, including `set()` | Yes, see the note below |
-| Dynamic routes | Yes |
-| `export const prerender = true` | Yes, served from Storage |
-| `astro:env` secrets | Yes, from script environment variables |
-| `sharp` image service | No. Native binaries cannot run on the edge |
-
-### Cookies
-
-A pull zone created for a script has **Disable cookies** switched on, which
-strips `Set-Cookie` from every response. Turn it off before
-`Astro.cookies.set()` will reach the browser:
-
-```bash
-bunny api POST /pullzone/<pull-zone-id> --body '{"DisableCookies": false}'
-```
-
-## Local development
-
-`astro dev` works as usual for day-to-day work.
-
-To exercise the real edge bundle, build it and run it with
-[Deno](https://deno.com/):
-
-```bash
-astro build
-BUNNY_STORAGE_ZONE=my-site-assets \
-BUNNY_STORAGE_HOST=storage.bunnycdn.com \
-BUNNY_STORAGE_KEY=<read-only password> \
-deno run -A dist/index.js
-```
-
-It listens on `http://127.0.0.1:8080/` and reads assets from the real zone.
-The `cdn-` request headers only exist on the bunny.net network, so anything
-your code reads from them is absent locally.
-
-## Limits
-
-Edge Scripting allows one JavaScript file of up to 10 MB, and gives a script
-500 ms to start. A small Astro site bundles to roughly 600 kB. See the
-[Edge Scripting limits](https://bunny.net/docs/scripting/limits).
-
-## Troubleshooting
-
-**The bundle fails to resolve `fs` or `child_process`.** A dependency needs
-Node-only modules. `sharp` is the usual cause, and the adapter already replaces
-it. If something else does it, replace that dependency.
-
-**Prerendered pages 404.** Upload `dist/client` again. The adapter looks for
-both `<route>/index.html` and `<route>.html`.
-
-**Assets 404 but pages render.** Upload from `dist/client`, not `dist`.
-
-**A POST returns 403.** Astro checks the request origin for server output.
-This is Astro's CSRF protection. Adjust `security.checkOrigin` if you need to.
-
-**The build warns about `Astro.request.headers`.** Middleware also runs while
-Astro prerenders a page, where there is no live request. Guard it with
-`if (context.isPrerendered) return next();`.
-
-## Documentation
-
-[Deploy an Astro site on Edge Scripting](https://bunny.net/docs/scripting/frameworks/astro)
 
 ## Licence
 
-[MIT](./LICENSE)
+[MIT](./LICENSE) © bunny.net

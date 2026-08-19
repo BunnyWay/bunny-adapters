@@ -1,0 +1,132 @@
+/**
+ * `astro preview` for Edge Scripting.
+ *
+ * It runs the file you are about to deploy, not a second server that behaves
+ * almost like it. A local storage zone stands in for Bunny Storage, so assets,
+ * prerendered pages and sessions all work with no account and no network.
+ *
+ * It needs Deno, because Deno is the Edge Scripting runtime. Running the bundle
+ * on Node would need a second build with different resolution rules, and the
+ * result would not be the thing that gets deployed.
+ */
+import { spawn, type ChildProcess } from "node:child_process";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+import type { CreatePreviewServer } from "astro";
+import { startLocalZone } from "./build/local-zone.js";
+
+/** Written by the adapter at the end of a build. */
+interface BuildInfo {
+  outfile: string;
+  client: string;
+}
+
+const INFO_FILE = ".bunny-adapter.json";
+
+async function readBuildInfo(outDir: URL): Promise<BuildInfo | null> {
+  try {
+    return JSON.parse(await readFile(new URL(INFO_FILE, outDir), "utf8")) as BuildInfo;
+  } catch {
+    return null;
+  }
+}
+
+/** True when Deno starts and reports a version. */
+function haveDeno(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const probe = spawn("deno", ["--version"], { stdio: "ignore" });
+    probe.once("error", () => resolve(false));
+    probe.once("exit", (code) => resolve(code === 0));
+  });
+}
+
+/** Wait until the child answers, so preview does not print a URL that fails. */
+async function waitForServer(url: string, child: ChildProcess): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    if (child.exitCode !== null) throw new Error("The preview server stopped while starting.");
+    try {
+      await fetch(url, { method: "HEAD" });
+      return;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+  throw new Error(`No answer from ${url} after 10 seconds.`);
+}
+
+const createPreviewServer: CreatePreviewServer = async ({
+  outDir,
+  client,
+  root,
+  host,
+  port,
+  logger,
+}) => {
+  const info = await readBuildInfo(outDir);
+  if (!info) {
+    throw new Error(
+      "No build to preview. Run `astro build` first. " +
+        "If you set `bundle: false`, run your own server instead.",
+    );
+  }
+
+  if (!(await haveDeno())) {
+    throw new Error(
+      "astro preview needs Deno, because Edge Scripting runs on Deno.\n" +
+        "  Install it:  curl -fsSL https://deno.land/install.sh | sh\n" +
+        "  Or use `astro dev`, which needs only Node.",
+    );
+  }
+
+  const rootDir = fileURLToPath(root);
+  const bundlePath = path.resolve(rootDir, info.outfile);
+
+  // The zone stands in for Bunny Storage. It is writable, so a session written
+  // during preview survives the next request.
+  const zone = await startLocalZone({ dir: fileURLToPath(client), zone: "preview" });
+
+  // Astro passes a name or nothing. The runtime listens on an address.
+  const hostname = !host || host === "localhost" ? "127.0.0.1" : host;
+
+  const child = spawn("deno", ["run", "-A", bundlePath], {
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      PORT: String(port),
+      BUNNY_HOSTNAME: hostname,
+      BUNNY_STORAGE_ZONE: zone.zone,
+      BUNNY_STORAGE_HOST: zone.host,
+      BUNNY_STORAGE_KEY: "preview",
+      BUNNY_SESSION_ZONE: zone.zone,
+      BUNNY_SESSION_KEY: "preview",
+    },
+  });
+
+  const closed = new Promise<void>((resolve, reject) => {
+    child.once("error", reject);
+    child.once("exit", () => resolve());
+  });
+
+  const url = `http://${hostname === "0.0.0.0" ? "127.0.0.1" : hostname}:${port}`;
+  try {
+    await waitForServer(url, child);
+  } catch (error) {
+    await zone.close();
+    throw error;
+  }
+  logger.info(`Serving ${path.relative(rootDir, bundlePath)} on Deno, with a local storage zone.`);
+
+  return {
+    host: hostname,
+    port,
+    closed: () => closed,
+    async stop() {
+      child.kill();
+      await zone.close();
+      await closed.catch(() => {});
+    },
+  };
+};
+
+export default createPreviewServer;

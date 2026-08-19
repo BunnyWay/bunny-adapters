@@ -1,0 +1,77 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+let error: string | null = null;
+
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const name = String(form.get("name") ?? "")
+    .trim()
+    .slice(0, 40);
+  try {
+    if (name) Astro.session?.set("name", name);
+    else Astro.session?.destroy();
+  } catch (cause) {
+    error = cause instanceof Error ? cause.message : String(cause);
+  }
+  if (!error) return Astro.redirect("/session", 303);
+}
+
+let name: string | undefined;
+try {
+  name = await Astro.session?.get<string>("name");
+} catch (cause) {
+  error = cause instanceof Error ? cause.message : String(cause);
+}
+---
+
+<Layout
+  title="Sessions"
+  lede="A session is one object in a Bunny Storage zone, so every edge node reads the same value."
+  badge="Astro.session"
+>
+  {
+    error && (
+      <div class="card" id="session-error" style="border-color:#d9534f">
+        <strong>The session could not be reached.</strong>
+        <p class="mono" style="margin:0.5rem 0 0">
+          {error}
+        </p>
+      </div>
+    )
+  }
+
+  <div class="card">
+    <p style="margin:0 0 1rem">
+      {
+        name ? (
+          <>
+            The session remembers you as <strong id="session-name">{name}</strong>.
+          </>
+        ) : (
+          <span id="session-name">Nothing is in the session yet.</span>
+        )
+      }
+    </p>
+
+    <form method="POST" class="row">
+      <input
+        type="text"
+        name="name"
+        placeholder="Your name"
+        maxlength="40"
+        aria-label="Your name"
+      />
+      <button type="submit">Remember me</button>
+      <button type="submit" class="ghost" name="name" value="">Forget me</button>
+    </form>
+  </div>
+
+  <h2>How it is set up</h2>
+  <p>
+    The adapter registers the driver on its own. Give the script a zone it may write to, and keep
+    the asset zone read-only:
+  </p>
+  <pre><code>bunny scripts env set BUNNY_SESSION_ZONE my-site-sessions
+bunny scripts env set BUNNY_SESSION_KEY &lt;write password&gt; --secret</code></pre>
+</Layout>

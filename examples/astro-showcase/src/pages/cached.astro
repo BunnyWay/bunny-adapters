@@ -1,0 +1,47 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+const generatedAt = new Date().toISOString();
+---
+
+<Layout
+  title="Caching"
+  lede="One rule in the config turns into the headers the bunny.net CDN reads."
+  badge="routeRules"
+>
+  <div class="card">
+    <table>
+      <tbody>
+        <tr>
+          <th>Generated at</th>
+          <td class="value" id="generated-at">{generatedAt}</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="margin: 0.9rem 0 0; color: var(--muted); font-size: 0.92rem">
+      On the live site this timestamp holds still for a minute, because the edge answers from its
+      cache. Every other page changes on every reload.
+    </p>
+  </div>
+
+  <h2>The rule</h2>
+  <pre><code>{`// astro.config.mjs
+routeRules: {
+  "/cached": { maxAge: 60, swr: 600, tags: ["demo"] },
+}`}</code></pre>
+
+  <h2>The headers it produces</h2>
+  <pre><code>Cache-Control: public, max-age=0, must-revalidate, s-maxage=60, stale-while-revalidate=600
+CDN-Tag: demo,astro-path:/cached</code></pre>
+  <p>
+    <code>s-maxage</code> is for the CDN and <code>max-age</code> is for the browser. Splitting them is
+    what makes a purge take effect at once.
+  </p>
+
+  <h2>Purging</h2>
+  <pre><code>{`await Astro.cache.invalidate({ tags: ["demo"] });`}</code></pre>
+  <p>
+    That calls the bunny.net purge API for the <code>demo</code> tag. Give the script
+    <code>BUNNY_API_KEY</code> and <code>BUNNY_PULLZONE_ID</code> first.
+  </p>
+</Layout>

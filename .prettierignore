@@ -1,0 +1,4 @@
+dist/
+.astro/
+CHANGELOG.md
+package-lock.json

@@ -1,0 +1,25 @@
+name: Feature request
+description: Ask for a capability, or for a new framework adapter.
+labels: ["enhancement", "triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What can you not do today? Describe the case, not the solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: What you want
+      description: Describe the behaviour you want. Show the configuration you imagine.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried
+      description: Other adapters, workarounds, or platform features you looked at.
