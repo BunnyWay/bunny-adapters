@@ -54,3 +54,8 @@ jobs:
       # emulator, runs the bundle on Deno, and asserts every route.
       # No bunny.net credential is needed.
       - run: node tests/e2e.mjs
+
+      # One small Astro project per configuration: a base path, a build
+      # format, redirects, islands, actions, and the rest. Each one builds,
+      # runs on Deno behind the same emulator, and is asserted.
+      - run: node --test --test-concurrency=4 tests/suites/*.test.mjs

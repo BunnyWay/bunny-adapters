@@ -11,6 +11,13 @@ export type { BuildManifest, BunnyRuntime, RuntimeOptions } from "./runtime/type
  *   Optimizer](https://bunny.net/docs/optimizer), which resizes and re-encodes
  *   at the edge. Turn Optimizer on for the pull zone first. It is a paid
  *   feature, so the adapter never enables it for you.
+ *
+ *   Optimizer does not reach an Edge Script origin today. With Optimizer on,
+ *   every image request that misses the CDN cache answers `523 Origin
+ *   Connection Failed`. Measured on two script-backed pull zones in August
+ *   2026, with `tests/live.mjs --optimizer`. So the URLs this service writes
+ *   are correct, and nothing serves them yet. Leave `imageService` at its
+ *   default until Optimizer can read from a script.
  * - `false` keeps whatever the project already configures. Use it when you want
  *   `sharp` for prerendered pages, and you never render an image on demand.
  */

@@ -11,7 +11,7 @@ import { createApp } from "astro/app/entrypoint";
 import { setGetEnv } from "astro/env/setup";
 import * as BunnySDK from "@bunny.net/edgescript-sdk";
 import { contentType, isHtml } from "./runtime/mime.js";
-import { objectCandidates, resolveObject } from "./runtime/paths.js";
+import { objectCandidates, resolveObject, stripBase } from "./runtime/paths.js";
 import { createStorage } from "./runtime/storage.js";
 import type { BuildManifest, BunnyRuntime, RuntimeOptions } from "./runtime/types.js";
 
@@ -41,7 +41,7 @@ const options = __BUNNY_ADAPTER_OPTIONS__;
 const build: BuildManifest =
   typeof __BUNNY_BUILD_MANIFEST__ !== "undefined"
     ? __BUNNY_BUILD_MANIFEST__
-    : { assets: null, headers: null };
+    : { assets: null, headers: null, redirects: null };
 
 /**
  * The set of files the build produced. When it is present the script knows
@@ -95,18 +95,55 @@ function runtimeContext(request: Request): BunnyRuntime {
 
 const app = createApp();
 
+/**
+ * Request headers that change which bytes of an object come back.
+ *
+ * Bunny Storage answers all of them, so they are passed straight through. That
+ * is what makes the script a range-capable origin: without it a pull zone has
+ * to treat every object as one blob, and a large file is only seekable once it
+ * is fully cached.
+ */
+const FETCH_REFINING_HEADERS = ["range", "if-range", "if-none-match", "if-modified-since"];
+
+/** The subset of a request's headers that Storage should see. */
+function refiningHeaders(request: Request): Headers {
+  const forward = new Headers();
+  for (const name of FETCH_REFINING_HEADERS) {
+    const value = request.headers.get(name);
+    if (value) forward.set(name, value);
+  }
+  return forward;
+}
+
+/** A response with no body of its own, whatever the object holds. */
+function isBodyless(status: number): boolean {
+  return status === 304 || status === 416;
+}
+
 /** Turn a Storage response into the response the visitor gets. */
 function fromStorageResponse(object: string, upstream: Response, method: string): Response {
   const type = contentType(object);
   const headers = new Headers({
     "content-type": type,
     "cache-control": isHtml(type) ? options.pageCacheControl : options.assetCacheControl,
+    // Say the object can be fetched in pieces. A pull zone will not slice an
+    // object, and will not answer a range from its cache, unless the origin
+    // says it may.
+    "accept-ranges": "bytes",
   });
 
-  // Let the pull zone and the browser revalidate instead of re-downloading.
-  for (const name of ["etag", "last-modified"]) {
+  // Let the pull zone and the browser revalidate instead of re-downloading,
+  // and let them ask for one piece at a time.
+  for (const name of ["etag", "last-modified", "content-range"]) {
     const value = upstream.headers.get(name);
     if (value) headers.set(name, value);
+  }
+
+  // Only when the body arrives as it is stored. A decompressed body is a
+  // different length from the one the header names.
+  if (!upstream.headers.get("content-encoding")) {
+    const length = upstream.headers.get("content-length");
+    if (length) headers.set("content-length", length);
   }
 
   // Headers Astro asked for on this prerendered page, such as a CSP.
@@ -114,11 +151,43 @@ function fromStorageResponse(object: string, upstream: Response, method: string)
     headers.set(name, value);
   }
 
-  if (method === "HEAD") {
+  // 206 and the two bodyless answers are the visitor's, and anything else that
+  // got this far is a whole object.
+  const status = upstream.status === 206 || isBodyless(upstream.status) ? upstream.status : 200;
+
+  if (method === "HEAD" || isBodyless(status)) {
     void upstream.body?.cancel();
-    return new Response(null, { status: 200, headers });
+    // A 304 must not name a length, because it describes no body.
+    if (status === 304) headers.delete("content-length");
+    return new Response(null, { status, headers });
   }
-  return new Response(upstream.body, { status: 200, headers });
+  return new Response(upstream.body, { status, headers });
+}
+
+/**
+ * Answer a redirect the build prerendered, or return `null`.
+ *
+ * Astro turns an internal redirect to a prerendered page into a page of its
+ * own, which carries a `Location` header. Serving that page would answer 200,
+ * and a browser ignores `Location` on a 200.
+ */
+function fromRedirects(pathname: string, method: string): Response | null {
+  if (!build.redirects) return null;
+
+  const local = stripBase(pathname, options.base);
+  if (local === null) return null;
+
+  for (const object of objectCandidates(local)) {
+    const entry = build.redirects[object];
+    if (!entry) continue;
+    // Astro's own rule when the route configured no status of its own.
+    const status = entry.status ?? (method === "GET" ? 301 : 308);
+    return new Response(null, {
+      status,
+      headers: { location: entry.to, "cache-control": options.pageCacheControl },
+    });
+  }
+  return null;
 }
 
 /**
@@ -128,20 +197,28 @@ function fromStorageResponse(object: string, upstream: Response, method: string)
  * for a path the build never produced. Without it, a path with no extension
  * costs two, because the page may be `<route>/index.html` or `<route>.html`.
  */
-async function fromStorage(pathname: string, method = "GET"): Promise<Response | null> {
+async function fromStorage(
+  pathname: string,
+  method = "GET",
+  forward?: Headers,
+): Promise<Response | null> {
   if (!storage.enabled) return null;
+
+  // The build on disk has no `base` prefix, and every request carries one.
+  const local = stripBase(pathname, options.base);
+  if (local === null) return null;
 
   let candidates: string[];
   if (assets) {
-    const object = resolveObject(pathname, assets);
+    const object = resolveObject(local, assets);
     if (!object) return null;
     candidates = [object];
   } else {
-    candidates = objectCandidates(pathname);
+    candidates = objectCandidates(local);
   }
 
   for (const object of candidates) {
-    const upstream = await storage.get(object);
+    const upstream = await storage.get(object, forward);
     if (upstream) return fromStorageResponse(object, upstream, method);
   }
   return null;
@@ -150,10 +227,21 @@ async function fromStorage(pathname: string, method = "GET"): Promise<Response |
 /**
  * Astro calls this to find a prerendered `404.html` or `500.html`. Without it
  * the visitor gets a bare status code, even though the page sits in Storage.
+ *
+ * The 500 page leaves with no caching. Astro reuses these headers on the
+ * response the visitor gets, and a pull zone that caches a 500 hands one
+ * transient failure to everybody who asks for that path. A 404 keeps the page
+ * lifetime, because a missing path stays missing until the next deploy.
  */
 async function prerenderedErrorPageFetch(url: string): Promise<Response> {
-  const response = await fromStorage(new URL(url).pathname);
+  const { pathname } = new URL(url);
+  const response = await fromStorage(pathname);
   if (!response) throw new Error(`No prerendered error page for ${url}`);
+
+  const local = stripBase(pathname, options.base) ?? pathname;
+  if (/\/500(\.html|\/index\.html)?$/.test(local)) {
+    response.headers.set("cache-control", options.serverCacheControl);
+  }
   return response;
 }
 
@@ -167,8 +255,21 @@ async function prerenderedErrorPageFetch(url: string): Promise<Response> {
  */
 function withCacheControl(response: Response): Response {
   if (response.headers.has("cache-control")) return response;
-  response.headers.set("cache-control", options.serverCacheControl);
-  return response;
+  try {
+    response.headers.set("cache-control", options.serverCacheControl);
+    return response;
+  } catch {
+    // `Response.redirect()` and `Response.error()` give immutable headers, and
+    // Astro builds an external redirect with the first of the two. Writing to
+    // them throws, so copy the response instead of failing the request.
+    const headers = new Headers(response.headers);
+    headers.set("cache-control", options.serverCacheControl);
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  }
 }
 
 /** Handle one request. Exported so it can be tested or wrapped. */
@@ -189,11 +290,17 @@ export async function handle(request: Request): Promise<Response> {
   const routeData = app.match(request);
   if (routeData) return withCacheControl(await app.render(request, { ...render, routeData }));
 
-  // 2. Not an Astro route. Look for an asset or a prerendered page.
-  const stored = await fromStorage(new URL(request.url).pathname, request.method);
+  const { pathname } = new URL(request.url);
+
+  // 2. A redirect the build turned into a page. It answers with its status.
+  const redirect = fromRedirects(pathname, request.method);
+  if (redirect) return redirect;
+
+  // 3. Not an Astro route. Look for an asset or a prerendered page.
+  const stored = await fromStorage(pathname, request.method, refiningHeaders(request));
   if (stored) return stored;
 
-  // 3. Nothing matched. Let Astro answer, which reaches back into Storage for
+  // 4. Nothing matched. Let Astro answer, which reaches back into Storage for
   //    a prerendered 404 when the project has one.
   return withCacheControl(await app.render(request, render));
 }

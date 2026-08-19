@@ -27,6 +27,33 @@ export function toObjectPath(pathname: string): string {
 }
 
 /**
+ * `base` in the one shape the runtime wants: `""` or `/prefix`.
+ *
+ * Astro accepts `/docs`, `docs/`, and `/`. The site root comes out as `""`, so
+ * a site with no base costs no comparison at all.
+ */
+export function normalizeBase(base: string | undefined): string {
+  const trimmed = (base ?? "").trim().replace(/^\/+|\/+$/g, "");
+  return trimmed === "" ? "" : `/${trimmed}`;
+}
+
+/**
+ * Remove `base` from a request path, or return `null` when the path is outside
+ * it.
+ *
+ * Astro writes the client build without the `base` prefix, and the browser asks
+ * with it. So the prefix has to come off before the script looks in Storage.
+ * A path outside the prefix belongs to no object, which is why this returns
+ * `null` rather than the path unchanged.
+ */
+export function stripBase(pathname: string, base: string): string | null {
+  if (base === "") return pathname;
+  if (pathname === base) return "/";
+  if (pathname.startsWith(`${base}/`)) return pathname.slice(base.length);
+  return null;
+}
+
+/**
  * The object paths that could answer a request path, best first.
  *
  * A path with a file extension is an asset, and there is one candidate. A path

@@ -8,6 +8,7 @@ import path from "node:path";
 import type { AstroIntegration, RouteToHeaders } from "astro";
 import { SIZE_LIMIT, bundleServer, formatSize, relativeTo, NODE_BUILTINS } from "./build/bundle.js";
 import { buildManifest } from "./build/manifest.js";
+import { normalizeBase } from "./runtime/paths.js";
 import type { RuntimeOptions } from "./runtime/types.js";
 import type { BunnyAdapterOptions } from "./types.js";
 
@@ -43,6 +44,8 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
   const runtime: RuntimeOptions = {
     storageZone,
     storageHost,
+    // Filled in from the resolved config, below.
+    base: "",
     assetCacheControl,
     pageCacheControl,
     serverCacheControl,
@@ -66,6 +69,10 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
     name: PACKAGE,
     hooks: {
       "astro:config:setup": ({ config, updateConfig, logger }) => {
+        // The client build has no `base` prefix on disk, and every request
+        // carries one. The script needs to know the prefix to remove it.
+        runtime.base = normalizeBase(config.base);
+
         if (imageService === "bunny") {
           updateConfig({
             image: {
@@ -75,7 +82,11 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
               },
             },
           });
-          logger.info("Images go through Bunny Optimizer. Turn Optimizer on for the pull zone.");
+          logger.warn(
+            "Images go through Bunny Optimizer, and Optimizer cannot read from an " +
+              "Edge Script yet. With Optimizer on, an image that misses the CDN cache " +
+              "answers 523. Leave imageService at its default until that is fixed.",
+          );
         } else if (imageService === "noop") {
           // sharp needs native binaries, which cannot run on the edge.
           updateConfig({
@@ -167,7 +178,12 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
 
         const rootDir = fileURLToPath(root);
         const outPath = path.resolve(rootDir, outfile);
-        const manifest = await buildManifest(clientDir, routeToHeaders, manifestLimit);
+        const manifest = await buildManifest(
+          clientDir,
+          routeToHeaders,
+          manifestLimit,
+          runtime.base,
+        );
 
         const { bytes } = await bundleServer({
           entryPoint: fileURLToPath(new URL(serverEntry, serverDir)),
@@ -206,6 +222,10 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
           logger.info(
             `Inlined ${manifest.assets.length} client file(s), so misses cost no lookup.`,
           );
+        }
+        if (manifest.redirects) {
+          const count = new Set(Object.values(manifest.redirects)).size;
+          logger.info(`Answering ${count} prerendered redirect(s) in the script.`);
         }
         logger.info(`Deploy it with: npx bunny-astro deploy`);
       },

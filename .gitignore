@@ -12,3 +12,7 @@ examples/*/dist/
 
 # Scratch output from the end-to-end runner.
 tests/.tmp/
+
+# Build output of the test fixtures.
+tests/fixtures/*/dist/
+tests/fixtures/*/.astro/

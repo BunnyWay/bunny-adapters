@@ -1,9 +1,11 @@
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 import {
+  normalizeBase,
   objectCandidates,
   resolveObject,
   storageBase,
+  stripBase,
   toObjectPath,
 } from "../dist/runtime/paths.js";
 
@@ -91,5 +93,50 @@ describe("storageBase", () => {
 
   it("ignores surrounding whitespace and a trailing slash", () => {
     assert.equal(storageBase("  storage.bunnycdn.com/  "), "https://storage.bunnycdn.com");
+  });
+});
+
+describe("normalizeBase", () => {
+  it("gives the site root an empty prefix, which costs no comparison", () => {
+    assert.equal(normalizeBase("/"), "");
+    assert.equal(normalizeBase(""), "");
+    assert.equal(normalizeBase(undefined), "");
+  });
+
+  it("accepts every shape Astro allows", () => {
+    assert.equal(normalizeBase("/docs"), "/docs");
+    assert.equal(normalizeBase("docs"), "/docs");
+    assert.equal(normalizeBase("/docs/"), "/docs");
+    assert.equal(normalizeBase(" /docs/ "), "/docs");
+  });
+
+  it("keeps a prefix of more than one segment", () => {
+    assert.equal(normalizeBase("/a/b"), "/a/b");
+  });
+});
+
+describe("stripBase", () => {
+  it("changes nothing when the site has no base", () => {
+    assert.equal(stripBase("/about", ""), "/about");
+  });
+
+  it("removes the prefix", () => {
+    assert.equal(stripBase("/docs/about", "/docs"), "/about");
+    assert.equal(stripBase("/docs/_astro/app.css", "/docs"), "/_astro/app.css");
+  });
+
+  it("reads the base itself as the site root", () => {
+    assert.equal(stripBase("/docs", "/docs"), "/");
+    assert.equal(stripBase("/docs/", "/docs"), "/");
+  });
+
+  it("refuses a path outside the base, which belongs to no object", () => {
+    assert.equal(stripBase("/about", "/docs"), null);
+    assert.equal(stripBase("/", "/docs"), null);
+  });
+
+  it("does not treat a longer name as the base", () => {
+    // "/docsearch" starts with "/docs", and it is a different path.
+    assert.equal(stripBase("/docsearch/x", "/docs"), null);
   });
 });

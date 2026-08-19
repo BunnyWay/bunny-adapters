@@ -348,6 +348,47 @@ export const checks = [
   },
 
   {
+    name: "a stored object can be fetched in pieces",
+    async run({ get, assert }) {
+      // A pull zone will not answer a range from its cache, and will not slice
+      // a large object, unless the origin says it accepts ranges. So a video
+      // would only be seekable once it was fully cached.
+      const whole = await get("/square.png", { method: "HEAD" });
+      assert(whole.status === 200, `status ${whole.status}`);
+      assert(whole.headers.get("accept-ranges") === "bytes", "the answer accepts no ranges");
+
+      const size = Number(whole.headers.get("content-length"));
+      assert(size > 0, `content-length was ${whole.headers.get("content-length")}`);
+
+      const part = await get("/square.png", { headers: { range: "bytes=0-99" } });
+      assert(part.status === 206, `a range answered ${part.status}`);
+      assert(
+        part.headers.get("content-range") === `bytes 0-99/${size}`,
+        `content-range ${part.headers.get("content-range")}`,
+      );
+      // The runner reads a body as text, and these are image bytes. So the
+      // length has to come from the header rather than from the string.
+      assert(
+        part.headers.get("content-length") === "100",
+        `content-length ${part.headers.get("content-length")}, not 100`,
+      );
+    },
+  },
+
+  {
+    name: "a stored object is revalidated, not downloaded again",
+    async run({ get, assert }) {
+      const first = await get("/square.png", { method: "HEAD" });
+      const etag = first.headers.get("etag");
+      assert(etag, "the answer carries no ETag");
+
+      const again = await get("/square.png", { headers: { "if-none-match": etag } });
+      assert(again.status === 304, `a conditional request answered ${again.status}`);
+      assert(again.body === "", "a 304 carried a body");
+    },
+  },
+
+  {
     name: "a path that climbs out of the zone is refused",
     async run({ get, assert }) {
       const response = await get("/_astro/../../../../etc/passwd");
