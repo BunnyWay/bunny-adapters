@@ -12,14 +12,15 @@ concurrency:
 
 jobs:
   check:
-    # Both package.json files ask for Node 20 or later, so both ends of
-    # that promise get tested.
+    # Astro 7 is a peer dependency, and it needs Node 22.12 or later, so
+    # that is the floor both package.json files ask for. Test the floor
+    # and the current release.
     name: Types, format, unit tests (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        node: [20, 22]
+        node: [22, 24]
     steps:
       - uses: actions/checkout@v4
 

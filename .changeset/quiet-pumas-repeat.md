@@ -43,5 +43,9 @@ Say when Bunny Storage refuses the script. A 401 or a 403 was indistinguishable
 from a missing object, so a mistyped password made every page 404 with nothing
 in the log. The script now writes one line naming the zone and the status.
 
+Raise the Node floor to 22.12, which is what Astro 7 needs. The package asked
+for Node 20 or later, so npm would install it on a version that cannot run
+Astro at all.
+
 Also: an empty `PORT` no longer makes the script listen on a random port, and
 the published package carries the sources its maps name.

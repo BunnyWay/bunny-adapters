@@ -5,7 +5,7 @@ it, and how a change reaches npm.
 
 ## Setup
 
-You need [Node](https://nodejs.org/) 20 or later and
+You need [Node](https://nodejs.org/) 22.12 or later and
 [Deno](https://deno.com/) 2. Deno is the Edge Scripting runtime, so the tests use
 it to run the real bundle.
 
@@ -16,7 +16,8 @@ npm install
 npm run build
 ```
 
-Continuous integration runs the checks on Node 20 and on Node 22.
+Astro 7 sets that floor, and the adapter has Astro as a peer dependency.
+Continuous integration runs the checks on Node 22 and on Node 24.
 
 This is an npm workspaces monorepo. `npm install` at the root installs every
 package, and links each example to the adapter beside it.
