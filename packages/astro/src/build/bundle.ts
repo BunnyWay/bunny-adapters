@@ -73,6 +73,43 @@ export interface BundleParams {
 
 export interface BundleResult {
   bytes: number;
+  /**
+   * What fills the bundle, largest first, one entry per package. A script above
+   * the limit needs this: "10 MB" is a fact, and "shiki is 4 MB of it" is a
+   * thing you can act on.
+   */
+  largest: BundleContributor[];
+}
+
+export interface BundleContributor {
+  /** A package name, or a path inside the project. */
+  name: string;
+  bytes: number;
+}
+
+/** The package a bundled input belongs to, or its path inside the project. */
+function contributorName(input: string): string {
+  const parts = input.split("node_modules/");
+  if (parts.length === 1)
+    return input.startsWith("../") ? input : `this project (${input.split("/")[0]})`;
+  const inside = (parts[parts.length - 1] ?? "").split("/");
+  return inside[0]?.startsWith("@") ? inside.slice(0, 2).join("/") : (inside[0] ?? input);
+}
+
+/** Group the bundle's inputs by package, biggest first. */
+export function largestContributors(
+  inputs: Record<string, { bytesInOutput: number }>,
+  limit: number,
+): BundleContributor[] {
+  const totals = new Map<string, number>();
+  for (const [input, { bytesInOutput }] of Object.entries(inputs)) {
+    const name = contributorName(input);
+    totals.set(name, (totals.get(name) ?? 0) + bytesInOutput);
+  }
+  return [...totals]
+    .map(([name, bytes]) => ({ name, bytes }))
+    .sort((a, b) => b.bytes - a.bytes)
+    .slice(0, limit);
 }
 
 /** Bundle the server for the Edge Scripting runtime, which is Deno. */
@@ -116,8 +153,11 @@ export async function bundleServer(params: BundleParams): Promise<BundleResult> 
   }
 
   const result = await esbuild.build(buildOptions);
-  const bytes = Object.values(result.metafile?.outputs ?? {})[0]?.bytes ?? 0;
-  return { bytes };
+  const output = Object.values(result.metafile?.outputs ?? {})[0];
+  return {
+    bytes: output?.bytes ?? 0,
+    largest: largestContributors(output?.inputs ?? {}, 5),
+  };
 }
 
 /** A short, readable size, for the build log. */

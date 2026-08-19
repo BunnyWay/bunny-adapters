@@ -7,7 +7,14 @@ import { fileURLToPath } from "node:url";
 import { rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AstroIntegration, RouteToHeaders } from "astro";
-import { SIZE_LIMIT, bundleServer, formatSize, relativeTo, NODE_BUILTINS } from "./build/bundle.js";
+import {
+  SIZE_LIMIT,
+  bundleServer,
+  formatSize,
+  relativeTo,
+  NODE_BUILTINS,
+  type BundleContributor,
+} from "./build/bundle.js";
 import { MANIFEST_VERSION, writeBuildManifest } from "./build/deploy-manifest.js";
 import { buildManifest } from "./build/manifest.js";
 import { normalizeBase } from "./runtime/paths.js";
@@ -25,6 +32,17 @@ export type { BunnySessionConfig } from "./session.js";
 
 const PACKAGE = "@bunny.net/astro-adapter";
 
+/**
+ * Routes Astro injects into every project, used or not.
+ *
+ * They render per request, so counting them would make every project look like
+ * it needs a server. `/_image` is only reached by a page that renders on demand,
+ * and `/_server-islands/[name]` only by a page holding a `server:defer`
+ * component. A project with an island and nothing else on demand has to say so
+ * with `deploy: "server"`, because nothing in the route list tells them apart.
+ */
+const ALWAYS_INJECTED = new Set(["/_image", "/_server-islands/[name]"]);
+
 /** Above this many client files, the manifest costs more than it saves. */
 const DEFAULT_MANIFEST_LIMIT = 20_000;
 
@@ -40,6 +58,13 @@ function versionOf(specifier: string, from?: string): string | undefined {
   }
 }
 
+/** The "what filled it" half of the message for a script above the limit. */
+function largestList(largest: BundleContributor[]): string {
+  if (largest.length === 0) return "";
+  const rows = largest.map((entry) => `  ${formatSize(entry.bytes).padStart(8)}  ${entry.name}`);
+  return `The largest parts of it are:\n${rows.join("\n")}\n`;
+}
+
 export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegration {
   const {
     storageZone = "",
@@ -53,6 +78,7 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
     sessions = true,
     cache = true,
     assetManifest = true,
+    deploy = "auto",
   } = options;
 
   const runtime: RuntimeOptions = {
@@ -79,7 +105,18 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
   let outDir: URL;
   let routeToHeaders: RouteToHeaders | null = null;
   let astroVersion: string | undefined;
-  let staticOnly = false;
+  /**
+   * How many routes render per request. `null` until the routes are resolved.
+   *
+   * `config.output` cannot answer this. Since Astro 5, `output: "static"` is the
+   * default and a page leaves it with `export const prerender = false`, so a
+   * static-output project can still hold routes that need a server. Deciding
+   * from `output` deployed those projects as files, and every dynamic route went
+   * missing without a word.
+   */
+  let onDemandRoutes: number | null = null;
+  /** Only used when the routes cannot be counted, on an Astro without that hook. */
+  let outputMode: string | undefined;
 
   return {
     name: PACKAGE,
@@ -133,15 +170,10 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
         });
       },
 
-      "astro:config:done": ({ setAdapter, config, logger }) => {
-        if (config.output === "static") {
-          logger.warn(
-            'output is "static", so no server will be built. Set output: "server" to render on the edge.',
-          );
-        }
+      "astro:config:done": ({ setAdapter, config }) => {
         root = config.root;
         outDir = config.outDir;
-        staticOnly = config.output === "static";
+        outputMode = config.output;
         astroVersion = versionOf("astro/package.json", fileURLToPath(new URL("./", config.root)));
         clientDir = config.build.client;
         serverDir = config.build.server;
@@ -165,6 +197,16 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
             envGetSecret: "stable",
           },
         });
+      },
+
+      // The only hook that knows which routes need a server. It runs before the
+      // build, so `astro:build:done` can say what to deploy.
+      "astro:routes:resolved": ({ routes }) => {
+        onDemandRoutes = routes.filter(
+          (route) =>
+            !route.isPrerendered &&
+            !(route.origin === "internal" && ALWAYS_INJECTED.has(route.pattern)),
+        ).length;
       },
 
       "astro:build:setup": ({ vite, target }) => {
@@ -203,7 +245,12 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
           runtime.base,
         );
 
-        const { bytes } = await bundleServer({
+        // Only the routes know whether this project needs a server at all.
+        const rendersOnDemand =
+          deploy === "server" ||
+          (onDemandRoutes === null ? outputMode !== "static" : onDemandRoutes > 0);
+
+        const { bytes, largest } = await bundleServer({
           entryPoint: fileURLToPath(new URL(serverEntry, serverDir)),
           rootDir,
           outPath,
@@ -241,12 +288,31 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
         );
 
         const relative = relativeTo(rootDir, outPath);
-        if (bytes > SIZE_LIMIT) {
-          logger.error(
-            `${relative} is ${formatSize(bytes)}. Edge Scripting refuses anything above 10 MB.`,
+        if (!rendersOnDemand) {
+          // Nothing is deployed from this file, so its size is nobody's problem.
+          logger.info(
+            `Every route is prerendered, so \`bunny deploy\` uploads the files and no script. ` +
+              `${relative} is what \`astro preview\` runs (${formatSize(bytes)}).`,
+          );
+          logger.info(
+            'A server island needs the script, and no route says so. Pass deploy: "server" to deploy one.',
+          );
+        } else if (bytes > SIZE_LIMIT) {
+          // A build whose script cannot be deployed has not succeeded. Failing
+          // here costs a developer one build; finding out at the deploy costs
+          // them the deploy, and the site it half-created.
+          throw new Error(
+            `${relative} is ${formatSize(bytes)}, and Edge Scripting takes ${formatSize(SIZE_LIMIT)}.\n\n` +
+              `${largestList(largest)}\n` +
+              "A package that only runs at build time does not belong in the server. Two things usually help:\n" +
+              "  - Prerender the routes that do not need a server: `export const prerender = true`.\n" +
+              "  - Keep a heavy dependency out of a page, and out of anything a page imports.",
           );
         } else {
-          logger.info(`Bundled to ${relative} (${formatSize(bytes)}, limit 10 MB).`);
+          logger.info(
+            `Bundled to ${relative} (${formatSize(bytes)}, limit ${formatSize(SIZE_LIMIT)}).` +
+              (onDemandRoutes ? ` ${onDemandRoutes} route(s) render per request.` : ""),
+          );
         }
 
         if (manifest.assets) {
@@ -265,12 +331,10 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
           manifestVersion: MANIFEST_VERSION,
           adapter: { package: PACKAGE, version: versionOf("../package.json") },
           framework: { name: "astro", version: astroVersion },
-          kind: staticOnly ? "static" : "ssr",
-          script: {
-            entry: relative,
-            type: "standalone",
-            bytes,
-          },
+          kind: rendersOnDemand ? "ssr" : "static",
+          // A static build has nothing to deploy but its files. Naming a script
+          // here would have the CLI upload one that never runs.
+          ...(rendersOnDemand ? { script: { entry: relative, type: "standalone", bytes } } : {}),
           assets: { dir: relativeTo(rootDir, fileURLToPath(clientDir)) },
           requires: {
             // No `cliVersion` floor yet. `manifestVersion` already stops a CLI

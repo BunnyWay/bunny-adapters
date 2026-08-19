@@ -97,6 +97,8 @@ export async function buildFixture(name, { expectFailure = false } = {}) {
     /** One file out of `dist/client`. */
     read: (relative) => readFileSync(path.join(dist, "client", relative), "utf8"),
     hasBundle: () => existsSync(bundle),
+    /** What the build told `bunny deploy`. The CLI reads nothing else. */
+    manifest: () => JSON.parse(readFileSync(path.join(dir, ".bunny/build.json"), "utf8")),
   };
 }
 

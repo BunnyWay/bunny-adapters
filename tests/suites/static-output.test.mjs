@@ -25,8 +25,19 @@ describe("static-output", () => {
     }
   });
 
-  it("still builds one deployable file", () => {
+  // `astro preview` runs the bundle, so the build still writes one. What the
+  // CLI must not do is deploy it: there is no route for it to answer.
+  it("builds a bundle for preview, and tells the CLI not to deploy it", () => {
     assert.ok(site.hasBundle());
+    const manifest = site.manifest();
+    assert.equal(manifest.kind, "static");
+    assert.equal(manifest.script, undefined);
+    assert.equal(manifest.assets.dir, "dist/client");
+  });
+
+  it("says what will be deployed, and gives no advice about output modes", () => {
+    assert.match(site.log, /Every route is prerendered/);
+    assert.doesNotMatch(site.log, /Set output: "server"/);
   });
 
   it("serves the home page out of Storage", async () => {

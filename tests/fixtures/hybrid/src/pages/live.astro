@@ -1,0 +1,12 @@
+---
+export const prerender = false;
+const renderedAt = Date.now();
+const greeting = Astro.url.searchParams.get("name") ?? "nobody";
+---
+
+<html>
+  <body>
+    <p id="rendered-at">{renderedAt}</p>
+    <p id="greeting">{greeting}</p>
+  </body>
+</html>

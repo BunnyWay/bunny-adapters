@@ -69,6 +69,21 @@ export interface BunnyAdapterOptions {
    */
   imageService?: ImageServiceMode;
 
+  /**
+   * What a deploy sends.
+   *
+   * - `"auto"` looks at the routes. A route that renders per request means a
+   *   script, and the files it renders from. No such route means the files
+   *   alone, which the CDN serves from Bunny Storage for less.
+   * - `"server"` always deploys the script. Use it when the project has a
+   *   `server:defer` component and every route is prerendered: Astro injects the
+   *   server island route into every project, so the route list cannot tell that
+   *   case from a project that never uses one.
+   *
+   * @default "auto"
+   */
+  deploy?: "auto" | "server";
+
   /** Settings for the Bunny Optimizer image service. Ignored otherwise. */
   image?: BunnyImageServiceConfig;
 
