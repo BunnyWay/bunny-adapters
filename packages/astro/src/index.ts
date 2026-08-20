@@ -4,7 +4,6 @@
  */
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { existsSync } from "node:fs";
 import { rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AstroIntegration, RouteToHeaders } from "astro";
@@ -18,7 +17,8 @@ import {
   type BundleContributor,
 } from "./build/bundle.js";
 import { MANIFEST_VERSION, writeBuildManifest } from "./build/deploy-manifest.js";
-import { buildManifest } from "./build/manifest.js";
+import { buildManifest, listFiles } from "./build/manifest.js";
+import { writeStaticFiles } from "./build/static-files.js";
 import { normalizeBase } from "./runtime/paths.js";
 import type { RuntimeOptions } from "./runtime/types.js";
 import type { BunnyAdapterOptions } from "./types.js";
@@ -33,21 +33,6 @@ export type { BunnyCacheConfig } from "./cache.js";
 export type { BunnySessionConfig } from "./session.js";
 
 const PACKAGE = "@bunny.net/astro-adapter";
-
-/**
- * Routes Astro injects into every project, used or not.
- *
- * They render per request, so counting them would make every project look like
- * it needs a server. `/_image` is only reached by a page that renders on demand;
- * `/_server-islands/[name]` only by a page holding a `server:defer` component;
- * and `/404` is Astro's own answer for a project that wrote no 404 page. A
- * project whose own `404.astro` is prerendered reports that route as prerendered,
- * and a project that renders one per request reports it as its own.
- *
- * A project with an island and nothing else on demand has to say so with
- * `deploy: "server"`, because nothing in the route list tells them apart.
- */
-const ALWAYS_INJECTED = new Set(["/_image", "/_server-islands/[name]", "/404"]);
 
 /**
  * Above this many client files, the manifest costs more than it saves.
@@ -121,18 +106,18 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
   let outDir: URL;
   let routeToHeaders: RouteToHeaders | null = null;
   let astroVersion: string | undefined;
+  let assetsDir = "_astro";
   /**
-   * How many routes render per request. `null` until the routes are resolved.
+   * What Astro is building: `"server"` when any route renders per request.
    *
-   * `config.output` cannot answer this. Since Astro 5, `output: "static"` is the
-   * default and a page leaves it with `export const prerender = false`, so a
-   * static-output project can still hold routes that need a server. Deciding
-   * from `output` deployed those projects as files, and every dynamic route went
-   * missing without a word.
+   * Astro works this out while it resolves the routes, and it is the only
+   * answer worth having. `config.output` cannot say: since Astro 5,
+   * `output: "static"` is the default and a page leaves it with
+   * `export const prerender = false`, so a static-output project can still hold
+   * routes that need a server. Reading `output` deployed those projects as
+   * files, and every dynamic route went missing without a word.
    */
-  let onDemandRoutes: number | null = null;
-  /** Only used when the routes cannot be counted, on an Astro without that hook. */
-  let outputMode: string | undefined;
+  let buildOutput: "static" | "server" = "server";
 
   return {
     name: PACKAGE,
@@ -186,24 +171,40 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
         });
       },
 
-      "astro:config:done": ({ setAdapter, config }) => {
+      "astro:config:done": ({ setAdapter, config, buildOutput: astroOutput }) => {
+        // Read this first. `setAdapter` sets it to "server" unless the adapter
+        // declares "static" back, so anything after the call reads a value the
+        // call itself wrote.
+        buildOutput = deploy === "server" ? "server" : astroOutput;
+
         root = config.root;
         outDir = config.outDir;
-        outputMode = config.output;
         astroVersion = versionOf("astro/package.json", fileURLToPath(new URL("./", config.root)));
         clientDir = config.build.client;
         serverDir = config.build.server;
         serverEntry = config.build.serverEntry ?? "entry.mjs";
+        assetsDir = config.build.assets;
 
         setAdapter({
           name: PACKAGE,
           entrypointResolution: "auto",
           serverEntrypoint: `${PACKAGE}/server`,
-          previewEntrypoint: `${PACKAGE}/preview`,
+          // A static build deploys no script, so there is nothing of ours to
+          // preview. Leaving this out hands `astro preview` to Astro's own
+          // static server, which serves the files the deploy will serve.
+          ...(buildOutput === "server" ? { previewEntrypoint: `${PACKAGE}/preview` } : {}),
           adapterFeatures: {
-            // Bunny Storage cannot hold a headers file, so the script applies
-            // them when it serves a prerendered page.
+            // Bunny Storage cannot hold a headers file. A server build applies
+            // them in the script, and a static build writes `_headers`.
             staticHeaders: true,
+            // Astro decided this, and this hands the decision back. Without it
+            // Astro builds a server for a site that has no route to render.
+            buildOutput,
+            // A static build would otherwise put the pages in `dist` and the
+            // assets beside them. The deploy uploads one directory, and every
+            // build has to name the same one.
+            preserveBuildClientDir: true,
+            preserveBuildServerDir: true,
           },
           supportedAstroFeatures: {
             staticOutput: "stable",
@@ -213,16 +214,6 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
             envGetSecret: "stable",
           },
         });
-      },
-
-      // The only hook that knows which routes need a server. It runs before the
-      // build, so `astro:build:done` can say what to deploy.
-      "astro:routes:resolved": ({ routes }) => {
-        onDemandRoutes = routes.filter(
-          (route) =>
-            !route.isPrerendered &&
-            !(route.origin === "internal" && ALWAYS_INJECTED.has(route.pattern)),
-        ).length;
       },
 
       "astro:build:setup": ({ vite, target }) => {
@@ -247,12 +238,69 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
       },
 
       "astro:build:done": async ({ logger }) => {
+        const rootDir = fileURLToPath(root);
+        const clientPath = relativeTo(rootDir, fileURLToPath(clientDir));
+
+        // A build with no route to render on demand needs nothing of ours at
+        // run time. `bunny deploy` uploads the files, and the `bunny sites`
+        // router serves them: it answers a miss with `404.html`, and it reads
+        // `_redirects` and `_headers`. Every static framework gets the same,
+        // and a site with no server should not carry a megabyte of one.
+        if (buildOutput === "static") {
+          const written = await writeStaticFiles(clientDir, routeToHeaders, runtime.base, {
+            assetsDir,
+            assetCacheControl,
+          });
+
+          logger.info(
+            `Every route is prerendered, so this build deploys no script: \`bunny deploy\` uploads ${clientPath}, and the site is served as files.`,
+          );
+          logger.info(
+            "Nothing here needs the adapter. Keep it for the day a route renders per request, and " +
+              'pass deploy: "server" if a prerendered page holds a `server:defer` island, because ' +
+              "Astro gives such a project the same route list as one with no island at all.",
+          );
+          if (written.length > 0) {
+            logger.info(
+              `Wrote ${written.join(" and ")} into ${clientPath}. They are what carries your redirects and headers, and Cloudflare and Netlify read the same two files.`,
+            );
+          }
+
+          // `noop` is the default because a transform on demand needs `sharp`,
+          // and `sharp` needs native binaries the edge does not have. Nothing
+          // here renders on demand, so nothing here asks for one. Measured on
+          // astro.build: 1.3 GB of images went up untouched.
+          if (imageService === "noop") {
+            const images = (await listFiles(fileURLToPath(clientDir))).filter((file) =>
+              IMAGE_FILE.test(file),
+            ).length;
+            if (images > 0) {
+              logger.info(
+                `${images} image(s) went into the build untransformed. Every route here is prerendered, ` +
+                  "so `imageService: false` lets sharp resize them while the site builds, and the deploy carries less.",
+              );
+            }
+          }
+
+          // What `bunny deploy` reads. A static build asks for no script, no
+          // variable, and no pull zone setting: the files are the whole deploy.
+          const staticManifest = await writeBuildManifest(rootDir, {
+            manifestVersion: MANIFEST_VERSION,
+            adapter: { package: PACKAGE, version: versionOf("../package.json") },
+            framework: { name: "astro", version: astroVersion },
+            kind: "static",
+            assets: { dir: clientPath },
+            dev: { command: "astro dev", preview: "astro preview" },
+          });
+          logger.info(`Wrote ${staticManifest}. Deploy it with: bunny deploy`);
+          return;
+        }
+
         if (!bundle) {
           logger.info(`Skipped bundling. The server entry is ${serverEntry}.`);
           return;
         }
 
-        const rootDir = fileURLToPath(root);
         const outPath = path.resolve(rootDir, outfile);
         const manifest = await buildManifest(
           clientDir,
@@ -260,29 +308,6 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
           manifestLimit,
           runtime.base,
         );
-
-        // Only the routes know whether this project needs a server at all.
-        const rendersOnDemand =
-          deploy === "server" ||
-          (onDemandRoutes === null ? outputMode !== "static" : onDemandRoutes > 0);
-
-        // A prerendered site is not always servable as plain files. Bunny Storage
-        // holds objects and nothing else: it cannot answer a 404 with the page
-        // Astro built for it, cannot redirect, and cannot add a header. The
-        // script does all three, so anything that needs one needs the script.
-        const has404 = ["404.html", "404/index.html"].some((name) =>
-          existsSync(new URL(name, clientDir)),
-        );
-        const scriptDoes = [
-          ...(has404 ? ["answers a missing page with your 404 page"] : []),
-          ...(manifest.redirects
-            ? [`sends ${new Set(Object.values(manifest.redirects)).size} prerendered redirect(s)`]
-            : []),
-          ...(manifest.headers
-            ? [`adds the headers ${Object.keys(manifest.headers).length} path(s) ask for`]
-            : []),
-        ];
-        const needsScript = rendersOnDemand || scriptDoes.length > 0;
 
         const { bytes, largest } = await bundleServer({
           entryPoint: fileURLToPath(new URL(serverEntry, serverDir)),
@@ -322,16 +347,7 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
         );
 
         const relative = relativeTo(rootDir, outPath);
-        if (!needsScript) {
-          // Nothing is deployed from this file, so its size is nobody's problem.
-          logger.info(
-            `Every route is prerendered: \`bunny deploy\` uploads ${relativeTo(rootDir, fileURLToPath(clientDir))}, and deploys no script. ` +
-              `${relative} is there for \`astro preview\` (${formatSize(bytes)}).`,
-          );
-          logger.info(
-            'A `server:defer` component needs the script. If this site has one, pass deploy: "server".',
-          );
-        } else if (bytes > SIZE_LIMIT) {
+        if (bytes > SIZE_LIMIT) {
           // A build whose script cannot be deployed has not succeeded. Failing
           // here costs a developer one build; finding out at the deploy costs
           // them the deploy, and the site it half-created.
@@ -342,22 +358,16 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
               "  - Prerender the routes that do not need a server: `export const prerender = true`.\n" +
               "  - Keep a heavy dependency out of a page, and out of anything a page imports.",
           );
-        } else if (!rendersOnDemand) {
-          logger.info(
-            `Every route is prerendered. The script is deployed with them because it ` +
-              `${scriptDoes.join(", and ")}. Bundled to ${relative} (${formatSize(bytes)}, limit ${formatSize(SIZE_LIMIT)}).`,
-          );
         } else {
           logger.info(
-            `Bundled to ${relative} (${formatSize(bytes)}, limit ${formatSize(SIZE_LIMIT)}).` +
-              (onDemandRoutes ? ` ${onDemandRoutes} route(s) render per request.` : ""),
+            `Bundled to ${relative} (${formatSize(bytes)}, limit ${formatSize(SIZE_LIMIT)}).`,
           );
         }
 
         // The documented limit is 10 MB, and a script well under it can still
         // fail to start. Saying nothing here leaves a green build and a site that
         // answers 400 with no body.
-        if (needsScript && bytes > START_RISK_SIZE) {
+        if (bytes > START_RISK_SIZE) {
           logger.warn(
             `${relative} is ${formatSize(bytes)}, and a script has 500 ms to start. Every byte of it is ` +
               "parsed first, so the edge may answer 400 with an empty body. Measured in August 2026: the same code " +
@@ -372,20 +382,6 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
           );
         }
 
-        // `noop` is the default because a transform on demand needs `sharp`, and
-        // `sharp` needs native binaries the edge does not have. A build with no
-        // route on demand never asks for one, so it can have the real thing and
-        // upload far less. Measured on astro.build: 1.3 GB of images went up
-        // untouched.
-        if (imageService === "noop" && !rendersOnDemand && manifest.assets) {
-          const images = manifest.assets.filter((file) => IMAGE_FILE.test(file)).length;
-          if (images > 0) {
-            logger.info(
-              `${images} image(s) went into the build untransformed. Every route here is prerendered, ` +
-                "so `imageService: false` lets sharp resize them while the site builds, and the deploy carries less.",
-            );
-          }
-        }
         if (manifest.redirects) {
           const count = new Set(Object.values(manifest.redirects)).size;
           logger.info(`Answering ${count} prerendered redirect(s) in the script.`);
@@ -397,11 +393,9 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
           manifestVersion: MANIFEST_VERSION,
           adapter: { package: PACKAGE, version: versionOf("../package.json") },
           framework: { name: "astro", version: astroVersion },
-          kind: needsScript ? "ssr" : "static",
-          // A static build has nothing to deploy but its files. Naming a script
-          // here would have the CLI upload one that never runs.
-          ...(needsScript ? { script: { entry: relative, type: "standalone", bytes } } : {}),
-          assets: { dir: relativeTo(rootDir, fileURLToPath(clientDir)) },
+          kind: "ssr",
+          script: { entry: relative, type: "standalone", bytes },
+          assets: { dir: clientPath },
           requires: {
             // No `cliVersion` floor yet. `manifestVersion` already stops a CLI
             // that cannot read this shape, and a CLI without `bunny deploy` has

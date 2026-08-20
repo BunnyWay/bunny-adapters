@@ -11,20 +11,13 @@ mentions `output` and has one dynamic route reported a build with no server. The
 files went up, the dynamic routes did not, and nothing said so. Measured on
 `withastro/astro.build`, which has nine such routes.
 
-The adapter now decides from the routes, and from what plain files can do. Bunny
-Storage holds objects and nothing else: it cannot answer a missing page with the
-404 page Astro built, cannot redirect, and cannot add a header. So the build
-manifest says:
+The adapter now decides from the routes. The build manifest says `kind: "ssr"`
+when a route renders per request, and the script is deployed with the files it
+renders from.
 
-- `kind: "ssr"` when a route renders per request, or when the site has a 404
-  page, a prerendered redirect, or a header to apply. The script is deployed with
-  the files.
-- `kind: "static"` only when plain files behave exactly the same. No script is
-  named, and `astro preview` still gets a bundle to run.
-
-Astro injects `/_image` and `/_server-islands/[name]` into every project, so
-neither counts. A project whose only on-demand work is a `server:defer` component
-has to say `deploy: "server"`, which is the new option this adds.
+A project whose only on-demand work is a `server:defer` component has to say
+`deploy: "server"`, which is the new option this adds. Astro reports such a
+project as a fully prerendered one, so nothing in the routes can tell it apart.
 
 A script above the 10 MB limit now fails the build, and says which packages
 filled it. A script above 7.5 MB gets a warning, because the documented 10 MB is

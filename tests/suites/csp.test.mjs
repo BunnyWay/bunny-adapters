@@ -45,6 +45,13 @@ describe("csp", () => {
     assert.equal(page.headers.get("content-type"), "text/html; charset=utf-8");
   });
 
+  // A page out of Storage is not an asset, and it must not be cached like one:
+  // the next deploy replaces it under the same name.
+  it("gives a stored page the page lifetime, not the asset one", async () => {
+    const page = await site.get("/about");
+    assert.equal(page.headers.get("cache-control"), "public, max-age=60");
+  });
+
   it("sends one policy, not two", async () => {
     const page = await site.get("/about");
     const all = page.headers.getSetCookie ? page.headers.get("content-security-policy") : null;

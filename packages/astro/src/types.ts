@@ -72,13 +72,16 @@ export interface BunnyAdapterOptions {
   /**
    * What a deploy sends.
    *
-   * - `"auto"` looks at the routes. A route that renders per request means a
-   *   script, and the files it renders from. No such route means the files
-   *   alone, which the CDN serves from Bunny Storage for less.
-   * - `"server"` always deploys the script. Use it when the project has a
-   *   `server:defer` component and every route is prerendered: Astro injects the
-   *   server island route into every project, so the route list cannot tell that
-   *   case from a project that never uses one.
+   * - `"auto"` follows Astro. A route that renders per request makes this a
+   *   server build, and the deploy is the script plus the files it renders
+   *   from. Every route prerendered makes it a static build, and the deploy is
+   *   the files alone: `bunny deploy` uploads them, and the `bunny sites`
+   *   router answers a miss with your `404.html`, sends your redirects, and
+   *   applies your headers.
+   * - `"server"` always builds and deploys the script. Use it when every route
+   *   is prerendered and a page holds a `server:defer` component: Astro reports
+   *   such a project as a static build, so nothing else can tell it apart from
+   *   a project that never uses one.
    *
    * @default "auto"
    */

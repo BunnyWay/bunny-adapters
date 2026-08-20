@@ -1,10 +1,9 @@
 /**
- * The only build that needs no script.
+ * The shape that needs neither a script nor the adapter.
  *
- * `kind: "static"` is a promise that plain files behave the same way. Bunny
- * Storage holds objects and nothing else: it cannot answer a 404 with the page
- * Astro built, cannot redirect, and cannot add a header. So a build makes that
- * promise only when it needs none of the three, which is what this fixture is.
+ * Every route prerendered, no 404 page, no redirect, and no header to apply.
+ * `bunny deploy` uploads the files, the CDN serves them out of Bunny Storage,
+ * and nothing is invoked per request.
  */
 import { strict as assert } from "node:assert";
 import { before, describe, it } from "node:test";
@@ -25,16 +24,21 @@ describe("files-only", () => {
     assert.equal(manifest.assets.dir, "dist/client");
   });
 
-  it("says so, and says what would need a script", () => {
+  // A static build asks for no script, so it asks for no variable and no pull
+  // zone setting either. Those are what a script needs to run.
+  it("asks the CLI for nothing else", () => {
+    assert.equal(site.manifest().requires, undefined);
+  });
+
+  it("says so, and says what the adapter is still for", () => {
     assert.match(site.log, /Every route is prerendered/);
     assert.match(site.log, /deploys no script/);
+    assert.match(site.log, /Nothing here needs the adapter/);
     assert.match(site.log, /server:defer/);
   });
 
-  // `astro preview` runs the file that would be deployed, so the build writes
-  // one even when the deploy has no use for it.
-  it("still builds a bundle for astro preview", () => {
-    assert.ok(site.hasBundle());
+  it("builds no script", () => {
+    assert.ok(!site.hasBundle(), "the build wrote dist/index.js");
   });
 
   // `noop` is the default because transforming on demand needs `sharp`, which

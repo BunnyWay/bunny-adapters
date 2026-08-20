@@ -125,6 +125,10 @@ It needs [Deno](https://deno.com/) 2, because Deno is the Edge Scripting
 runtime. The `cdn-` request headers only exist on the bunny.net network, so
 anything your code reads from them is absent locally.
 
+A [build with no server](#a-site-with-no-server) has no file to run, so
+`astro preview` serves `dist/client` from Astro's own static server. That needs
+no Deno.
+
 ## What works
 
 | Astro feature                                                | Supported                                                |
@@ -144,11 +148,57 @@ anything your code reads from them is absent locally.
 | Range requests on a stored object                            | Yes, [see below](#large-files-and-range-requests)        |
 | `node:fs` and the other built-ins Deno provides              | Yes. [See below](#node-built-ins)                        |
 | `astro:env` secrets                                          | Yes, from script environment variables                   |
-| `astro preview`                                              | Yes, with Deno                                           |
-| Static page headers, such as a CSP                           | Yes, applied by the script                               |
+| `astro preview`                                              | Yes. With Deno for a server build                        |
+| Static page headers, such as a CSP                           | Yes, [see below](#a-site-with-no-server)                 |
 | `sharp` image service                                        | No. Native binaries cannot run on the edge               |
 | Edge middleware as a separate function                       | No. Middleware runs inside the script                    |
 | i18n domains                                                 | Untested. Tell us if you need it                         |
+
+## A site with no server
+
+A build whose every route is prerendered deploys no script. Astro reports it as
+a static build, the adapter hands that answer back, and `bunny deploy` uploads
+`dist/client` to a storage zone. The `bunny sites` router serves it, and nothing
+is invoked per request:
+
+```
+[@bunny.net/astro-adapter] Every route is prerendered, so this build deploys no
+script: `bunny deploy` uploads dist/client, and the site is served as files.
+```
+
+Files alone cannot answer a 404 with a page, send a redirect, or add a header.
+The router does all three, for every framework, and it learns what to do from
+three file names that Cloudflare Pages and Netlify read too:
+
+| The router reads | What it does with it                                        |
+| ---------------- | ----------------------------------------------------------- |
+| `404.html`       | Answers a path the build never produced, with status 404    |
+| `_redirects`     | Sends a redirect with a real status, not a `<meta>` refresh |
+| `_headers`       | Adds the headers Bunny Storage cannot hold, such as a CSP   |
+
+`404.html` is your own `404.astro`. The build writes the other two, from your
+`redirects` config and from the headers Astro asks the host to set, and it names
+the hashed asset directory in `_headers` so those files can be cached forever:
+
+```
+# dist/client/_headers
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+/about
+  content-security-policy: script-src 'self' 'sha256-…'
+```
+
+Astro still writes its own meta-refresh page for each redirect, so a deploy that
+never reaches the router sends the visitor on all the same. The rule in
+`_redirects` carries `!`, which is what makes the router's 301 win over it.
+
+One case the routes cannot show: a prerendered page holding a `server:defer`
+island still needs the script, and Astro reports such a project as a static
+build. Say so:
+
+```js
+adapter: bunny({ deploy: "server" }),
+```
 
 ## Images
 
@@ -372,6 +422,7 @@ bunny({
   cache: true, // false to configure your own provider
 
   // Build
+  deploy: "auto", // "server" to deploy the script even with every route prerendered
   outfile: "dist/index.js",
   bundle: true, // false to run your own bundler
   assetManifest: true, // or a file count, above which the script probes instead
@@ -413,6 +464,20 @@ deploy without knowing anything about Astro:
     "storage": { "write": true, "reason": "Astro.session" },
     "env": [{ "name": "BUNNY_STORAGE_ZONE", "reason": "the zone holding the client build" }],
   },
+}
+```
+
+A static build names no script, and asks for nothing else: the files are the
+whole deploy.
+
+```jsonc
+{
+  "manifestVersion": 1,
+  "adapter": { "package": "@bunny.net/astro-adapter", "version": "0.1.0" },
+  "framework": { "name": "astro", "version": "7.2.4" },
+  "kind": "static",
+  "assets": { "dir": "dist/client" },
+  "dev": { "command": "astro dev", "preview": "astro preview" },
 }
 ```
 

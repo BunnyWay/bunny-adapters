@@ -19,7 +19,7 @@ describe("deploy-prefix", () => {
   before(async () => {
     // The zone holds `deploys/a1b2c3d4/...` and nothing at its root, exactly as
     // a deployed site's zone does.
-    site = await serveFixture("static-output", { assetPrefix: PREFIX });
+    site = await serveFixture("deploy-prefix", { assetPrefix: PREFIX });
   });
   after(() => site?.close());
 

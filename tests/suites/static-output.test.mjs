@@ -1,22 +1,27 @@
 /**
- * A site with nothing rendered on demand.
+ * A site with nothing rendered on demand deploys no script at all.
  *
- * Every page comes out of Bunny Storage, and the script exists only to find it
- * and give it a content type. This is the cheapest way to run a site on the
- * edge, and the adapter says it supports it, so the suite has to prove it.
+ * This fixture has a 404 page, and that used to be enough to pull the whole
+ * Astro server along: Bunny Storage cannot answer a missing object with a page,
+ * so the script did it. The `bunny sites` router does it now, for every static
+ * framework, so a site with no server carries no server. The build says so, and
+ * writes nothing but files.
  */
 import { strict as assert } from "node:assert";
-import { after, before, describe, it } from "node:test";
-import { serveFixture, textOf } from "../harness.mjs";
+import { existsSync, readdirSync } from "node:fs";
+import path from "node:path";
+import { before, describe, it } from "node:test";
+import { preview } from "astro";
+import { buildFixture } from "../harness.mjs";
+import { freePort } from "../runner.mjs";
 
 describe("static-output", () => {
-  /** @type {Awaited<ReturnType<typeof serveFixture>>} */
+  /** @type {Awaited<ReturnType<typeof buildFixture>>} */
   let site;
 
   before(async () => {
-    site = await serveFixture("static-output");
+    site = await buildFixture("static-output");
   });
-  after(() => site?.close());
 
   it("prerenders every page", async () => {
     const files = await site.files();
@@ -25,68 +30,67 @@ describe("static-output", () => {
     }
   });
 
-  // Nothing here renders per request, and the script is still what gets
-  // deployed: this fixture has a 404 page, and Bunny Storage cannot answer a
-  // missing object with it. `tests/fixtures/files-only` is the shape that needs
-  // no script at all.
-  it("deploys the script, because a stored 404 page needs one", () => {
-    assert.ok(site.hasBundle());
+  it("tells the CLI to deploy the files, and names no script", () => {
     const manifest = site.manifest();
-    assert.equal(manifest.kind, "ssr");
-    assert.equal(manifest.script?.entry, "dist/index.js");
+    assert.equal(manifest.kind, "static");
+    assert.equal(manifest.script, undefined);
     assert.equal(manifest.assets.dir, "dist/client");
   });
 
-  it("says why the script is there, and gives no advice about output modes", () => {
-    assert.match(site.log, /Every route is prerendered\. The script is deployed with them/);
-    assert.match(site.log, /your 404 page/);
-    assert.doesNotMatch(site.log, /Set output: "server"/);
-  });
-
-  it("serves the home page out of Storage", async () => {
-    const page = await site.get("/");
-    assert.equal(page.status, 200);
-    assert.equal(textOf(page.body, "home"), "home");
-  });
-
-  it("never renders the page again", async () => {
-    const first = await site.get("/");
-    const second = await site.get("/");
-    assert.equal(
-      textOf(first.body, "built-at"),
-      textOf(second.body, "built-at"),
-      "the build timestamp changed, so the page was rendered again",
+  // Astro builds no server entry for a static build, so there is nothing to
+  // bundle and nothing to deploy. A bundle here would be a megabyte of server
+  // for a site that renders nothing.
+  it("builds no script, and no server output", () => {
+    assert.ok(!site.hasBundle(), "the build wrote dist/index.js");
+    const serverDir = path.join(site.dist, "server");
+    assert.ok(
+      !existsSync(serverDir) || readdirSync(serverDir).length === 0,
+      "dist/server holds files",
     );
   });
 
-  it("serves a nested page", async () => {
-    const page = await site.get("/about");
-    assert.equal(page.status, 200);
-    assert.equal(textOf(page.body, "prerendered"), "yes");
+  it("says the site needs no script, and no adapter", () => {
+    assert.match(site.log, /Every route is prerendered/);
+    assert.match(site.log, /deploys no script/);
+    assert.match(site.log, /Nothing here needs the adapter/);
+    // The one case the route list cannot see.
+    assert.match(site.log, /server:defer/);
   });
 
-  it("serves the stylesheet and a public file", async () => {
-    const page = await site.get("/");
-    const href = page.body.match(/href="(\/_astro\/[^"]+\.css)"/)?.[1];
-    assert.ok(href, "the page links no stylesheet");
-
-    const asset = await site.get(href);
-    assert.equal(asset.status, 200);
-    assert.ok(asset.headers.get("content-type").startsWith("text/css"));
-    assert.match(asset.headers.get("cache-control"), /immutable/);
-
-    const robots = await site.get("/robots.txt");
-    assert.equal(robots.status, 200);
+  // The router will not guess which directory holds hashed files, so the build
+  // says which one it is, in the file both Cloudflare and Netlify read.
+  it("writes the asset cache rule into _headers", async () => {
+    const files = await site.files();
+    assert.ok(files.includes("_headers"), "_headers is missing");
+    const headers = site.read("_headers");
+    assert.match(headers, /^\/_astro\/\*$/m);
+    assert.match(headers, /^ {2}Cache-Control: public, max-age=31536000, immutable$/m);
   });
 
-  it("gives an unknown path the 404 page", async () => {
-    const page = await site.get("/nothing-is-here");
-    assert.equal(page.status, 404);
-    assert.equal(textOf(page.body, "not-found"), "nothing here");
+  it("writes no _redirects, because this site has none", async () => {
+    const files = await site.files();
+    assert.ok(!files.includes("_redirects"), "_redirects was written for a site with no redirect");
   });
 
-  it("gives a stored page the page lifetime, not the asset one", async () => {
-    const page = await site.get("/about");
-    assert.equal(page.headers.get("cache-control"), "public, max-age=60");
+  // With no script to run, the adapter declares no preview entrypoint, and
+  // Astro serves `dist/client` from its own static server. Nothing here needs
+  // Deno, because nothing here is deployed to Deno.
+  it("previews through Astro's own static server", async () => {
+    const server = await preview({
+      root: site.dir,
+      server: { port: await freePort() },
+      logLevel: "error",
+    });
+    try {
+      // `dist/client`, because the adapter asks Astro to keep that folder even
+      // for a static build. The deploy uploads one directory, and every build
+      // has to name the same one.
+      for (const pathname of ["/", "/about/", "/robots.txt"]) {
+        const page = await fetch(`http://localhost:${server.port}${pathname}`);
+        assert.equal(page.status, 200, `${pathname} answered ${page.status}`);
+      }
+    } finally {
+      await server.stop();
+    }
   });
 });

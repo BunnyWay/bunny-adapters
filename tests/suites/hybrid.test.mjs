@@ -28,8 +28,13 @@ describe("hybrid", () => {
     assert.ok(manifest.script.bytes > 0);
   });
 
-  it("says in the log how many routes render per request", () => {
-    assert.match(site.log, /route\(s\) render per request/);
+  // Astro reports this build as a server build, and the adapter hands that
+  // answer back. Reading `config.output` instead reported a static build here,
+  // and the deploy went up with every dynamic route missing.
+  it("builds a server, and never says the site needs none", () => {
+    assert.ok(site.hasBundle(), "the build wrote no script");
+    assert.match(site.log, /Bundled to dist\/index\.js/);
+    assert.doesNotMatch(site.log, /deploys no script/);
   });
 
   it("prerenders the page that did not opt out", async () => {

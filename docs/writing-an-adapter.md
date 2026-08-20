@@ -75,6 +75,36 @@ pad and never a store. Persistent state belongs in Bunny Storage.
 - Pass `Bunny.v1.waitUntil` to the framework when it accepts one.
 - Read every secret from the environment, never from the bundle.
 
+## A build with no server
+
+An adapter reports what a build needs. It never decides how the host serves it.
+
+So a build with no route to render per request writes no script at all. It
+reports `kind: "static"`, and `bunny deploy` uploads the files: the
+`bunny sites` router serves them, exactly as it serves a Hugo site. Ask the
+framework whether a server is needed, and never read a config field that only
+sets a default. Astro's `output` is such a field, and reading it deployed three
+real projects with every dynamic route missing.
+
+A static deploy still needs a 404 page, redirects, and headers, and the router
+reads three file names for them:
+
+| File         | What the router does with it                               |
+| ------------ | ---------------------------------------------------------- |
+| `404.html`   | Answers a path the deploy does not hold, with status 404   |
+| `_redirects` | One rule per line: `from to status`. `!` beats a real file |
+| `_headers`   | A path, then indented `Name: value` lines                  |
+
+Cloudflare Pages and Netlify read the same names, so a framework plugin that
+already writes them needs nothing from us. Write what the framework cannot
+express as a file, and write it under those names. Do not invent a manifest
+field for it: the router must stay framework-neutral, or every new framework
+needs a new CLI release.
+
+Do not fail a build for being static. A project crosses that line in both
+directions as its routes change, and a build that breaks on the commit which
+prerenders the last dynamic route is hostile.
+
 ## The build manifest
 
 The CLI knows no framework. At the end of the build, write
