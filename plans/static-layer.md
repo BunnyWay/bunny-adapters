@@ -1,5 +1,67 @@
 # The static layer belongs to `bunny sites`
 
+> **Built on 2026-08-20.** The adapter is `6755e10` in this repository, the CLI
+> is `c2de63f` on `feat/framework-deploys`, and the documentation is `2e8d360`
+> on `docs/edge-scripting-astro-guide`.
+>
+> **Verified offline, and nothing against a live account.** The adapter passes
+> all three tiers: 119 unit tests, 20 fixture suites each run on Deno, and the
+> showcase end to end. The CLI passes its 572 tests, `tsc --noEmit`, and the
+> linter. The router source is byte-identical to a file that `node --check`
+> parses, and its parsing and matching functions are unit-tested by extracting
+> them from the shipped string. **No deploy was made to bunny.net.** So router
+> v4 and the zone setting are unproven against real hosts: the 404 page, the
+> `_redirects` and `_headers` handling, and the `Cache-Control` the router now
+> owns all still need one live site to confirm.
+>
+> **What turned out differently.**
+>
+> - Declaring `buildOutput` left **no `dist/server` at all**, not an empty one,
+>   and no bundle. `preserveBuildClientDir` kept `dist/client` in place, so
+>   `assets.dir` did not move. Astro's answer agreed with the old route count on
+>   every fixture.
+> - **`build.redirects: false` was not set** (item 8). With it, Astro drops a
+>   redirect route before it records the headers (`core/build/generate.js:341`),
+>   so `routeToHeaders` loses every redirect and with it the expanded paths of a
+>   dynamic one like `/legacy/[id]`. Astro keeps writing its meta-refresh pages,
+>   and the rules in `_redirects` carry Netlify's `!` force marker instead, which
+>   is what makes the router's real 301 win over the page.
+> - **The router reads its configuration through a reserved path**,
+>   `/_bunny/router/<name>` with a four-name allowlist, and not through a marker
+>   header. A header shares a CDN cache key with a client request for the same
+>   path, so a forged one could have had a header-less response cached for
+>   everybody.
+> - **A rewrite (`_redirects` status 200) is not supported.** It would have the
+>   router fetch another path of its own site, and two rules can make that loop.
+>   It is the one thing in the subset both hosts agree on that we left out, and
+>   the SPA fallback is what would want it.
+> - **The immutable asset rule comes from `_headers`, not from the router.** The
+>   router will not guess which directory holds hashed files; the adapter names
+>   it (`/_astro/*`), and every other preset can too. The router's own default
+>   is `public, max-age=60` for a document and `public, max-age=2592000` for
+>   anything else, which is what the zone override used to force on everything.
+> - **The health check lived in `commands/deploy/framework.ts`,** not in the
+>   `health.ts` the plan named. That module now exists, `findDeployFault` moved
+>   into it, and `findMissingPageFault` joined it. It compares the answer with
+>   the deploy's own `404.html` bytes rather than trying to recognise bunny.net's
+>   page, and it runs on the static path too, which is where the fault happened.
+> - **`deploy-prefix` needed a fixture of its own.** It borrowed
+>   `static-output`, which now builds no script, and two suites building one
+>   fixture were racing anyway.
+> - **The `astro preview` test drives Astro's programmatic `preview()`.** The
+>   `astro preview` command detects an agentic environment and daemonises, so the
+>   spawned process exits before the server answers.
+>
+> **What was decided, not measured.** The cache override is off, and HTML gets
+> `max-age=60`. The edge hit rate for HTML was not measured either side of that,
+> and it is one constant away from any other answer. The open question below
+> stands.
+>
+> **What was not built.** CLI item 3, converting a static site to a framework
+> site in place. The plan gates it on phase 2 of `one-command-deploys.md`, which
+> has not shipped, and doing it before that means a zone change instead of
+> adding a script.
+
 A fully prerendered site is a `bunny sites` site. It is not an adapter feature.
 This plan moves the 404 page, the redirects, and the headers out of the adapter,
 and into the CLI, where every framework gets them.
