@@ -1,5 +1,72 @@
 # One deploy command: `bunny sites deploy`
 
+**Built on 2026-08-21.** The CLI, this repository, and the guide all say
+`bunny sites deploy`, and `bunny deploy` and `bunny rollback` are gone. Three
+commits carry it: "Make bunny sites deploy the one deploy command" in the CLI on
+`feat/framework-deploys`, "Document one deploy command, not two" in the
+documentation on `docs/edge-scripting-astro-guide`, and "Name the one command
+that deploys the build" here.
+
+## What turned out differently
+
+- **The bundle read had to be lifted out of the deploy.** The design moved site
+  resolution up into `sites/deploy.ts`, which would have put the 10 MB refusal
+  after the site was created: the check lived inside `deployFramework`. So
+  `readServerBundle` is its own exported step, and the command runs it before it
+  resolves a site. The property the design assumed is a function boundary now.
+- **A configured `sites.dir` counts as a directory.** The design gated the
+  adapter offer on the `[dir]` argument. A `sites.dir` in `bunny.jsonc` is the
+  same instruction, so both gate it, and a project with one is never offered a
+  server.
+- **Two flags disappeared rather than moved.** `--built` told `sites deploy` that
+  `bunny deploy` had already built, and `runBuildCommand` took the name of the
+  command to print on failure. One command needs neither.
+- **The build offer now runs with a manifest present.** `bunny deploy` deployed a
+  stale build in silence when one existed. An interactive run offers the build
+  either way, which is the static path's behaviour and the safer one.
+- **`sites delete` said "router script"** about a build's own server. Fixed while
+  deleting the verification site.
+
+## What was verified
+
+Against a real account on 2026-08-21, with the showcase (a server build) and the
+`static-output` fixture (a build with every route prerendered):
+
+| Check                                   | Result                                                     |
+| --------------------------------------- | ---------------------------------------------------------- |
+| Server build, site created from nothing | storage zone, script, pull zone, and `.bunny/site.json`    |
+| Page that renders per request           | 200, `private, no-store`, a live request id and client IP  |
+| Prerendered page from Storage           | 200, `public, max-age=60`                                  |
+| Endpoint in `src/pages/api/`            | 200, JSON, per-request values                              |
+| Asset from Storage                      | 200, `public, max-age=31536000, immutable`                 |
+| A path the deploy does not hold         | 404, with the deploy's own page                            |
+| Unchanged redeploy                      | "No changes", nothing uploaded                             |
+| Rollback of a changed pair              | `deployments publish --previous` took back code and asset  |
+| Static build, its own site              | 200, its own preview URL, and its own 404 page             |
+| A static build against a framework site | refused, before anything uploaded                          |
+| A server build against a static site    | refused, before anything uploaded                          |
+| Both sites deleted                      | every zone and script gone; the account holds only its own |
+
+Locally: `bun run typecheck`, `biome`, `prettier`, and 962 CLI tests, including
+the nine new ones on `projectNeedsServer`. In this repository: `npm run check`,
+`check:style`, `test`, `test:fixtures`, and `test:e2e`. The compiled binary was
+what ran every live check.
+
+## One defect found, and not fixed here
+
+A static site's HTML answers with `cache-control: max-age=25600000`, which is
+about 296 days in a visitor's browser. The router only sets `Cache-Control` on a
+response that carries none, and Bunny Storage sends one after all: it arrives
+with `cdn-requestpullcode: 206` from the file server, on a hit and on a miss.
+
+So the static layer's `PAGE_CACHE` of 60 seconds never reaches a page, and
+turning the zone's `CacheControlMaxAgeOverride` off did not achieve what it was
+meant to. This is the `router-static-layer` change's own ground, not this one's,
+and the fix changes caching for every static site. It needs its own change, its
+own measurement, and its own changeset.
+
+---
+
 `bunny deploy` is a second deploy command, and the CLI does not need one. `bunny
 sites deploy` already deploys a directory of files. This plan makes that command
 deploy a server build too, and removes `bunny deploy` and `bunny rollback`.
@@ -33,11 +100,11 @@ bunny sites deploy --production    # publish a static deploy as the live site
 The command reads `.bunny/build.json`, the manifest a framework adapter writes.
 The manifest decides the path:
 
-| What the command finds       | What it deploys                                       |
-| ---------------------------- | ----------------------------------------------------- |
-| `kind: "ssr"`                | An Edge Script, plus the client files in Bunny Storage |
-| `kind: "static"`             | The files at `assets.dir`, as any static site          |
-| No manifest                  | The directory, as today                                |
+| What the command finds | What it deploys                                        |
+| ---------------------- | ------------------------------------------------------ |
+| `kind: "ssr"`          | An Edge Script, plus the client files in Bunny Storage |
+| `kind: "static"`       | The files at `assets.dir`, as any static site          |
+| No manifest            | The directory, as today                                |
 
 ## How a project that needs a server is found
 
@@ -70,16 +137,16 @@ stops at the first match.
 
 The `deploy/` directory becomes part of `sites/`:
 
-| Now                     | After                        | Holds                                       |
-| ----------------------- | ---------------------------- | ------------------------------------------- |
-| `deploy/manifest.ts`    | `sites/build-manifest.ts`    | Reads `.bunny/build.json`                    |
-| `deploy/health.ts`      | `sites/health.ts`            | Asks a fresh deploy for a page              |
-| `deploy/api.ts`         | `sites/framework/api.ts`     | Provisions and publishes a framework site   |
-| `deploy/framework.ts`   | `sites/framework/deploy.ts`  | The framework deploy and the republish      |
-| `deploy/adapter.ts`     | `sites/framework/adapter.ts` | The adapter offer and the config edit       |
-| `deploy/project.ts`     | `sites/framework/project.ts` | Finds the project in a workspace            |
-| `deploy/index.ts`       | Deleted                      | Its work moves into `sites/deploy.ts`        |
-| `deploy/rollback.ts`    | Deleted                      | `sites deployments publish --previous`        |
+| Now                   | After                        | Holds                                     |
+| --------------------- | ---------------------------- | ----------------------------------------- |
+| `deploy/manifest.ts`  | `sites/build-manifest.ts`    | Reads `.bunny/build.json`                 |
+| `deploy/health.ts`    | `sites/health.ts`            | Asks a fresh deploy for a page            |
+| `deploy/api.ts`       | `sites/framework/api.ts`     | Provisions and publishes a framework site |
+| `deploy/framework.ts` | `sites/framework/deploy.ts`  | The framework deploy and the republish    |
+| `deploy/adapter.ts`   | `sites/framework/adapter.ts` | The adapter offer and the config edit     |
+| `deploy/project.ts`   | `sites/framework/project.ts` | Finds the project in a workspace          |
+| `deploy/index.ts`     | Deleted                      | Its work moves into `sites/deploy.ts`     |
+| `deploy/rollback.ts`  | Deleted                      | `sites deployments publish --previous`    |
 
 `health.ts` and `build-manifest.ts` sit directly under `sites/`, because both
 deploy paths read them. Everything a framework site alone needs sits under
@@ -143,11 +210,11 @@ work, for both kinds of site, and it already delegates a framework site to
 
 ## Flags on `bunny sites deploy`
 
-| Flag                      | What changes                                                  |
-| ------------------------- | ------------------------------------------------------------- |
-| `--region`                | New. The storage region for a site this deploy creates        |
-| `--production`, `--prod`  | Static only. A framework deploy publishes, because one script serves one release |
-| `--built`                 | Gone. It told `sites deploy` that `bunny deploy` already built |
+| Flag                     | What changes                                                                     |
+| ------------------------ | -------------------------------------------------------------------------------- |
+| `--region`               | New. The storage region for a site this deploy creates                           |
+| `--production`, `--prod` | Static only. A framework deploy publishes, because one script serves one release |
+| `--built`                | Gone. It told `sites deploy` that `bunny deploy` already built                   |
 
 A framework deploy says once that it publishes to production, and that preview
 environments are not built yet. It must not publish in silence, because the
@@ -171,13 +238,13 @@ it. Delete it with the deploy, or the bundles stay in the zone forever.
 
 Verify against a real account before this is called done:
 
-| Check                            | Why                                                  |
-| -------------------------------- | ---------------------------------------------------- |
-| A server Astro project           | The whole path, from no adapter to a live page        |
-| A static Astro project           | The adapter is never mentioned, and `dist` goes up    |
-| A static project with the adapter | `kind: "static"` deploys as files                    |
-| A rollback                       | `deployments publish --previous` restores both halves |
-| A kind mismatch                  | The message is the one above                          |
+| Check                             | Why                                                   |
+| --------------------------------- | ----------------------------------------------------- |
+| A server Astro project            | The whole path, from no adapter to a live page        |
+| A static Astro project            | The adapter is never mentioned, and `dist` goes up    |
+| A static project with the adapter | `kind: "static"` deploys as files                     |
+| A rollback                        | `deployments publish --previous` restores both halves |
+| A kind mismatch                   | The message is the one above                          |
 
 ## The other two repositories
 
