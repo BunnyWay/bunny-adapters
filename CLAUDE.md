@@ -25,6 +25,7 @@ npm install           # links every workspace
 git config blame.ignoreRevsFile .git-blame-ignore-revs  # skip the reformat commits
 npm run build         # compiles each package
 npm run check         # TypeScript, strict, no emit
+npm run check:style   # the style rules Prettier cannot hold
 npm test              # unit tests, node:test
 npm run test:e2e      # builds the showcase, runs it on Deno, asserts each route
 npm run test:fixtures # one project per configuration, each one run on Deno

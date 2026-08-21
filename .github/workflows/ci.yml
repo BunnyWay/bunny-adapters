@@ -32,6 +32,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run check
+      - run: npm run check:style
       - run: npm run format:check
       - run: npm run test --workspaces --if-present
       - run: npm run lint:package

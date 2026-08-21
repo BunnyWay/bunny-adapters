@@ -19,6 +19,7 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "check": "npm run check --workspaces --if-present",
+    "check:style": "node scripts/check-style.mjs",
     "test": "npm run build && npm run test --workspaces --if-present",
     "test:e2e": "npm run build && node tests/e2e.mjs",
     "test:fixtures": "npm run build && node --test --test-concurrency=4 tests/suites/*.test.mjs",

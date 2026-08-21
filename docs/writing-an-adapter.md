@@ -53,6 +53,13 @@ packages/<framework>/
 
 Keep `src/server.ts` small. It counts against the 500 ms start-up budget.
 
+The two trees are a contract, and not a preference. Everything a runtime entry
+reaches is bundled into the script, and nothing else is. So no runtime entry and
+nothing under `runtime/` imports from `build/`: `build/bundle.ts` imports
+esbuild, and one such import puts a build tool in a script that has 10 MB. An
+`import type` is erased by the compiler, so it crosses the line freely.
+`npm run check:style` enforces this.
+
 Most `node:` built-ins are available, including `node:fs` over a virtual file
 system. That file system is per isolate and lives in memory, so it is a scratch
 pad and never a store. Persistent state belongs in Bunny Storage.
@@ -90,6 +97,9 @@ These rules come from Edge Scripting, and no framework overrides them:
   the month we measured them.
 - Every public option carries a doc comment and a `@default`. That comment is
   the reference documentation, so write it for a user.
+- No `any`, and no `!` non-null assertion, in `src/`. On this platform a wrong
+  assumption arrives as one 500, or as a 400 with an empty body, and neither
+  says where it came from. Narrow an `unknown`, or default the value.
 
 ### What every adapter takes from its framework
 
@@ -155,13 +165,12 @@ Three reasons hold the pattern in place, and none of them is taste:
 
 Where `packages/astro` differs from the four, and why:
 
-| Difference                                  | Why                                                                                                    |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Prettier, spaces, double quotes             | The repository formats every workspace with one Prettier config. A per-package override can close this |
-| Comments on 35% of lines                    | The measured limits of this platform are written nowhere else. Keep them                               |
-| `build/` and `runtime/` instead of `utils/` | The split is load-bearing here: one tree bundles into the script, the other never does                 |
-| `cache.ts` instead of `cache/provider.ts`   | One file, one provider. Split it when it grows                                                         |
-| `define` instead of a virtual config module | Older Astro convention, and it still works. Move when we next touch it                                 |
+| Difference                                  | Why                                                                                    |
+| ------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Comments on 35% of lines                    | The measured limits of this platform are written nowhere else. Keep them               |
+| `build/` and `runtime/` instead of `utils/` | The split is load-bearing here: one tree bundles into the script, the other never does |
+| `cache.ts` instead of `cache/provider.ts`   | One file, one provider. Split it when it grows                                         |
+| `define` instead of a virtual config module | Older Astro convention, and it still works. Move when we next touch it                 |
 
 ### Nuxt
 
@@ -195,6 +204,25 @@ Each package is formatted by the tool its framework uses, and
 `npm run format` applies it. Configure the difference in the repository's
 Prettier config, or give the package its own tool. Never hand-format around
 either one, and never argue with it in review.
+
+`packages/astro` is tabs and single quotes, from an override in
+`.prettierrc.json5`. Biome writes the same indent and the same quotes for every
+official Astro adapter. Prettier does not copy Biome's wrapping exactly, and a
+second formatter costs a second config and a second tool in CI, so the override
+is where this stops.
+
+### The rules a formatter cannot hold
+
+`npm run check:style` runs `scripts/check-style.mjs`, and CI runs it beside
+`npm run check`. It holds the rules above that no formatter can see: the one
+`env()` helper, the `build/` and `runtime/` split, `any` and `!`, the deny list
+of build-only imports, and, per package, the import extension, the absence of
+classes, and the error type a build failure throws.
+
+The per-package rules live in one table at the top of that script. Adding an
+adapter means adding one row. A Nitro preset writes `.ts` on its imports, so the
+script must never assume one framework's answer, and every failure it prints
+names the section here that states the rule.
 
 ## The build contract
 
