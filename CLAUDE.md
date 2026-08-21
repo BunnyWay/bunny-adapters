@@ -22,6 +22,7 @@ use it.
 
 ```bash
 npm install           # links every workspace
+git config blame.ignoreRevsFile .git-blame-ignore-revs  # skip the reformat commits
 npm run build         # compiles each package
 npm run check         # TypeScript, strict, no emit
 npm test              # unit tests, node:test
