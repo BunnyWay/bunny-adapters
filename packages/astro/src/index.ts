@@ -7,14 +7,15 @@ import { fileURLToPath } from "node:url";
 import { rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AstroIntegration, RouteToHeaders } from "astro";
+import { AstroError } from "astro/errors";
 import {
   SIZE_LIMIT,
   START_RISK_SIZE,
   bundleServer,
   formatSize,
   relativeTo,
+  sizeLimitFailure,
   NODE_BUILTINS,
-  type BundleContributor,
 } from "./build/bundle.js";
 import { MANIFEST_VERSION, writeBuildManifest } from "./build/deploy-manifest.js";
 import { buildManifest, listFiles } from "./build/manifest.js";
@@ -58,13 +59,6 @@ function versionOf(specifier: string, from?: string): string | undefined {
 
 /** Images Astro copied without transforming them, when it had a chance to. */
 const IMAGE_FILE = /\.(?:png|jpe?g|webp|avif|gif|tiff?)$/i;
-
-/** The "what filled it" half of the message for a script above the limit. */
-function largestList(largest: BundleContributor[]): string {
-  if (largest.length === 0) return "";
-  const rows = largest.map((entry) => `  ${formatSize(entry.bytes).padStart(8)}  ${entry.name}`);
-  return `The largest parts of it are:\n${rows.join("\n")}\n`;
-}
 
 export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegration {
   const {
@@ -351,13 +345,12 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
           // A build whose script cannot be deployed has not succeeded. Failing
           // here costs a developer one build; finding out at the deploy costs
           // them the deploy, and the site it half-created.
-          throw new Error(
-            `${relative} is ${formatSize(bytes)}, and Edge Scripting takes ${formatSize(SIZE_LIMIT)}.\n\n` +
-              `${largestList(largest)}\n` +
-              "A package that only runs at build time does not belong in the server. Two things usually help:\n" +
-              "  - Prerender the routes that do not need a server: `export const prerender = true`.\n" +
-              "  - Keep a heavy dependency out of a page, and out of anything a page imports.",
-          );
+          //
+          // `AstroError` carries the hint apart from the message, so Astro
+          // prints both in its own error box. A plain Error arrives as a stack
+          // trace, and the advice is what the developer needs first.
+          const failure = sizeLimitFailure(relative, bytes, largest);
+          throw new AstroError(failure.message, failure.hint);
         } else {
           logger.info(
             `Bundled to ${relative} (${formatSize(bytes)}, limit ${formatSize(SIZE_LIMIT)}).`,

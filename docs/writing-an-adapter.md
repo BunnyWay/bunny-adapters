@@ -155,14 +155,13 @@ Three reasons hold the pattern in place, and none of them is taste:
 
 Where `packages/astro` differs from the four, and why:
 
-| Difference                                    | Why                                                                                                    |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Prettier, spaces, double quotes               | The repository formats every workspace with one Prettier config. A per-package override can close this |
-| Comments on 35% of lines                      | The measured limits of this platform are written nowhere else. Keep them                               |
-| `build/` and `runtime/` instead of `utils/`   | The split is load-bearing here: one tree bundles into the script, the other never does                 |
-| `cache.ts` instead of `cache/provider.ts`     | One file, one provider. Split it when it grows                                                         |
-| Plain `Error` for the build-time size failure | Not deliberate. Use `AstroError` for a failure the user has to fix                                     |
-| `define` instead of a virtual config module   | Older Astro convention, and it still works. Move when we next touch it                                 |
+| Difference                                  | Why                                                                                                    |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Prettier, spaces, double quotes             | The repository formats every workspace with one Prettier config. A per-package override can close this |
+| Comments on 35% of lines                    | The measured limits of this platform are written nowhere else. Keep them                               |
+| `build/` and `runtime/` instead of `utils/` | The split is load-bearing here: one tree bundles into the script, the other never does                 |
+| `cache.ts` instead of `cache/provider.ts`   | One file, one provider. Split it when it grows                                                         |
+| `define` instead of a virtual config module | Older Astro convention, and it still works. Move when we next touch it                                 |
 
 ### Nuxt
 

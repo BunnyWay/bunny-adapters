@@ -185,3 +185,36 @@ export function formatSize(bytes: number): string {
 export function relativeTo(rootDir: string, target: string): string {
   return path.relative(rootDir, target).split(path.sep).join("/");
 }
+
+/** The two halves of the message for a script Edge Scripting will not take. */
+export interface SizeLimitFailure {
+  /** What happened, and what filled the file. */
+  message: string;
+  /** What to do about it. Astro prints it under the message. */
+  hint: string;
+}
+
+/**
+ * The failure for a bundle above `SIZE_LIMIT`.
+ *
+ * It is a pure function on purpose. Reaching the condition needs a bundle above
+ * 10 MB, and no fixture should carry one, so the message is the part a test can
+ * reach.
+ */
+export function sizeLimitFailure(
+  relative: string,
+  bytes: number,
+  largest: BundleContributor[],
+): SizeLimitFailure {
+  const rows = largest.map((entry) => `  ${formatSize(entry.bytes).padStart(8)}  ${entry.name}`);
+  const filled = rows.length === 0 ? "" : `\n\nThe largest parts of it are:\n${rows.join("\n")}`;
+  return {
+    message:
+      `${relative} is ${formatSize(bytes)}, and Edge Scripting takes ` +
+      `${formatSize(SIZE_LIMIT)}.${filled}`,
+    hint:
+      "Prerender the routes that do not need a server with `export const prerender = true`. " +
+      "A package that only runs at build time does not belong in the server, and nor does a heavy " +
+      "dependency of a page.",
+  };
+}

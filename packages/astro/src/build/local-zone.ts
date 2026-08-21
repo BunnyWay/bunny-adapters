@@ -173,6 +173,8 @@ export async function startLocalZone(options: LocalZoneOptions): Promise<LocalZo
       let modified: Date;
       try {
         const info = await stat(target);
+        // An internal invariant, caught two lines below and answered with a
+        // 404. No user can act on it, so it is not an `AstroError`.
         if (!info.isFile()) throw new Error("not a file");
         size = info.size;
         modified = info.mtime;

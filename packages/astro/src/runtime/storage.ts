@@ -94,6 +94,11 @@ export function createStorage(config: StorageConfig): StorageClient {
     },
 
     async put(object, body, type = "application/octet-stream") {
+      // A plain `Error`, and not the `AstroError` the build-time files throw.
+      // The bundle reaches this module, and `astro/errors` must never enter the
+      // script: it is Astro's own code, and a script has 10 MB and 500 ms.
+      // Every throw in `session.ts`, `cache.ts`, `server.ts` and `src/runtime/`
+      // stays plain for the same reason.
       if (!base) throw new Error("No storage zone is configured.");
       const response = await fetch(urlFor(object), {
         method: "PUT",

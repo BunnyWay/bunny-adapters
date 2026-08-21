@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
-import { largestContributors } from "../dist/build/bundle.js";
+import { SIZE_LIMIT, largestContributors, sizeLimitFailure } from "../dist/build/bundle.js";
 
 /**
  * A script above 10 MB is a wall a real project hits, and "10 MB" alone tells
@@ -49,5 +49,37 @@ describe("largestContributors", () => {
     for (let i = 0; i < 10; i++) inputs[`node_modules/p${i}/index.js`] = { bytesInOutput: i };
     assert.equal(largestContributors(inputs, 3).length, 3);
     assert.equal(largestContributors(inputs, 3)[0].name, "p9");
+  });
+});
+
+/**
+ * The build throws this when the script cannot be deployed. Reaching the
+ * condition needs a bundle above 10 MB, and no fixture carries one, so the
+ * message and the hint are what a test can hold to.
+ */
+describe("sizeLimitFailure", () => {
+  const largest = [
+    { name: "shiki", bytes: 4 * 1024 * 1024 },
+    { name: "this project (src)", bytes: 2048 },
+  ];
+
+  it("says the size, the limit, and what filled the file", () => {
+    const { message } = sizeLimitFailure("dist/index.js", SIZE_LIMIT + 1, largest);
+    assert.match(message, /^dist\/index\.js is 10\.00 MB, and Edge Scripting takes 10\.00 MB\./);
+    assert.match(message, /The largest parts of it are:/);
+    assert.match(message, /4\.00 MB {2}shiki/);
+    assert.match(message, /2 kB {2}this project \(src\)/);
+  });
+
+  it("keeps the advice out of the message, so Astro prints it as a hint", () => {
+    const { message, hint } = sizeLimitFailure("dist/index.js", SIZE_LIMIT + 1, largest);
+    assert.doesNotMatch(message, /prerender/i);
+    assert.match(hint, /prerender/i);
+  });
+
+  it("says nothing about parts when esbuild reported none", () => {
+    const { message } = sizeLimitFailure("dist/index.js", SIZE_LIMIT + 1, []);
+    assert.doesNotMatch(message, /largest parts/);
+    assert.match(message, /Edge Scripting takes 10\.00 MB\.$/);
   });
 });

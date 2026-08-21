@@ -14,6 +14,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import type { CreatePreviewServer } from "astro";
+import { AstroError } from "astro/errors";
 import { startLocalZone } from "./build/local-zone.js";
 
 /** Written by the adapter at the end of a build. */
@@ -47,7 +48,12 @@ function haveDeno(): Promise<boolean> {
 /** Wait until the child answers, so preview does not print a URL that fails. */
 async function waitForServer(url: string, child: ChildProcess): Promise<void> {
   for (let attempt = 0; attempt < 100; attempt++) {
-    if (child.exitCode !== null) throw new Error("The preview server stopped while starting.");
+    if (child.exitCode !== null) {
+      throw new AstroError(
+        "The preview server stopped while starting.",
+        "Deno printed the reason above. Run the bundle yourself with `deno run -A <outfile>` to see it again.",
+      );
+    }
     try {
       await fetch(url, { method: "HEAD" });
       return;
@@ -55,7 +61,11 @@ async function waitForServer(url: string, child: ChildProcess): Promise<void> {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
   }
-  throw new Error(`No answer from ${url} after 10 seconds.`);
+  throw new AstroError(
+    `No answer from ${url} after 10 seconds.`,
+    "Something else may hold the port. Pass `--port` another number, or run the bundle with " +
+      "`deno run -A <outfile>` to see what the server says.",
+  );
 }
 
 const createPreviewServer: CreatePreviewServer = async ({
@@ -68,17 +78,17 @@ const createPreviewServer: CreatePreviewServer = async ({
 }) => {
   const info = await readBuildInfo(outDir);
   if (!info) {
-    throw new Error(
-      "No build to preview. Run `astro build` first. " +
-        "If you set `bundle: false`, run your own server instead.",
+    throw new AstroError(
+      "No build to preview.",
+      "Run `astro build` first. If you set `bundle: false`, run your own server instead.",
     );
   }
 
   if (!(await haveDeno())) {
-    throw new Error(
-      "astro preview needs Deno, because Edge Scripting runs on Deno.\n" +
-        "  Install it:  curl -fsSL https://deno.land/install.sh | sh\n" +
-        "  Or use `astro dev`, which needs only Node.",
+    throw new AstroError(
+      "astro preview needs Deno, because Edge Scripting runs on Deno.",
+      "Install it with `curl -fsSL https://deno.land/install.sh | sh`, " +
+        "or use `astro dev`, which needs only Node.",
     );
   }
 
