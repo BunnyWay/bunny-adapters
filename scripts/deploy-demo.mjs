@@ -15,7 +15,7 @@
  *
  * It needs the bunny CLI, an authenticated profile, and:
  *
- *   BUNNY_SCRIPT          the site name `bunny deploy` uses
+ *   BUNNY_SCRIPT          the site name `bunny sites deploy` uses
  *   BUNNY_SITE_URL        the site's URL, for --verify
  *
  * Put them in a `.env` beside this repository's root; it is ignored by git.

@@ -54,7 +54,7 @@ const storage = createStorage({
 	zone: options.storageZone || env('BUNNY_STORAGE_ZONE') || '',
 	host: options.storageHost || env('BUNNY_STORAGE_HOST') || 'storage.bunnycdn.com',
 	key: env('BUNNY_STORAGE_KEY') || '',
-	// `bunny deploy` gives each deploy its own folder, and writes the name into
+	// `bunny sites deploy` gives each deploy its own folder, and writes the name into
 	// the bundle. So this release can only read the files it was built with.
 	prefix: assetPrefix(),
 });

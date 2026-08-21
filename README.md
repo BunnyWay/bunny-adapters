@@ -37,7 +37,7 @@ issue](https://github.com/BunnyWay/bunny-adapters/issues/new/choose) and tell us
 ```bash
 npx astro add @bunny.net/astro-adapter   # add the adapter
 npm run build                            # build the edge bundle
-bunny deploy                             # build, upload the files, publish the script
+bunny sites deploy                       # upload the files, publish the script
 ```
 
 The [Astro adapter README](./packages/astro/README.md) has the whole story.

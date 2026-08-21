@@ -97,7 +97,7 @@ export async function buildFixture(name, { expectFailure = false } = {}) {
     /** One file out of `dist/client`. */
     read: (relative) => readFileSync(path.join(dist, "client", relative), "utf8"),
     hasBundle: () => existsSync(bundle),
-    /** What the build told `bunny deploy`. The CLI reads nothing else. */
+    /** What the build told `bunny sites deploy`. The CLI reads nothing else. */
     manifest: () => JSON.parse(readFileSync(path.join(dir, ".bunny/build.json"), "utf8")),
   };
 }
@@ -113,7 +113,7 @@ export async function serveFixture(name, { env = {}, assetPrefix, ...options } =
   const built = await buildFixture(name, options);
   if (!built.hasBundle()) throw new Error(`The "${name}" fixture built no bundle.`);
 
-  // `bunny deploy` puts each deploy in its own folder and tells the script the
+  // `bunny sites deploy` puts each deploy in its own folder and tells the script the
   // name, so a published release can only read the files it was built with.
   // Reproduce that layout: the zone root holds `<prefix>/`, and nothing else.
   let clientDir = path.join(built.dist, "client");

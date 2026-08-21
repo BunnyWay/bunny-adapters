@@ -75,7 +75,7 @@ export interface BunnyAdapterOptions {
 	 * - `"auto"` follows Astro. A route that renders per request makes this a
 	 *   server build, and the deploy is the script plus the files it renders
 	 *   from. Every route prerendered makes it a static build, and the deploy is
-	 *   the files alone: `bunny deploy` uploads them, and the `bunny sites`
+	 *   the files alone: `bunny sites deploy` uploads them, and the `bunny sites`
 	 *   router answers a miss with your `404.html`, sends your redirects, and
 	 *   applies your headers.
 	 * - `"server"` always builds and deploys the script. Use it when every route

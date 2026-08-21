@@ -1,5 +1,5 @@
 /**
- * The build manifest: what the build produced, in the shape `bunny deploy`
+ * The build manifest: what the build produced, in the shape `bunny sites deploy`
  * reads.
  *
  * The CLI must not know Astro. It reads this file instead, so a new adapter

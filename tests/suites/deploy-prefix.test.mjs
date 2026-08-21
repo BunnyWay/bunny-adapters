@@ -1,7 +1,7 @@
 /**
  * A deploy that lives in its own folder in the zone.
  *
- * `bunny deploy` uploads each build to `deploys/{id}/` and writes that name into
+ * `bunny sites deploy` uploads each build to `deploys/{id}/` and writes that name into
  * the top of the bundle, so a published release can only read the files it was
  * built with. That is what makes a rollback restore a page and its assets
  * together. This suite proves the script really looks there, and nowhere else.

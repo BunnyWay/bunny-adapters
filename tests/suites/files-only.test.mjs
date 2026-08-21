@@ -2,7 +2,7 @@
  * The shape that needs neither a script nor the adapter.
  *
  * Every route prerendered, no 404 page, no redirect, and no header to apply.
- * `bunny deploy` uploads the files, the CDN serves them out of Bunny Storage,
+ * `bunny sites deploy` uploads the files, the CDN serves them out of Bunny Storage,
  * and nothing is invoked per request.
  */
 import { strict as assert } from "node:assert";

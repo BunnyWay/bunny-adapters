@@ -37,7 +37,7 @@ describe("no-bundle", () => {
   });
 
   it("promises no deploy it cannot do", () => {
-    assert.ok(!/bunny deploy/.test(built.log), built.log);
+    assert.ok(!/bunny sites deploy/.test(built.log), built.log);
     assert.ok(!/Bundled to/.test(built.log), built.log);
     // No build manifest either: there is no single file for the CLI to deploy.
     assert.ok(!/build\.json/.test(built.log), built.log);

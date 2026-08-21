@@ -1,7 +1,7 @@
 /**
  * Which deploy this script is.
  *
- * `bunny deploy` uploads each build to its own folder in the storage zone, and
+ * `bunny sites deploy` uploads each build to its own folder in the storage zone, and
  * writes the folder's name into the top of the bundle:
  *
  * ```js

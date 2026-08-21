@@ -1,9 +1,9 @@
 # One command deploys: what is left
 
-**Phase 1 shipped.** `bunny deploy` deploys an Astro site end to end, and this
-document now holds only the work that is not done. The design it replaced is in
-git: `git log -- plans/one-command-deploys.md` finds the original, and the commit
-that shrank it to this.
+**Phase 1 shipped.** `bunny sites deploy` deploys an Astro site end to end, and
+this document now holds only the work that is not done. The design it replaced is
+in git: `git log -- plans/one-command-deploys.md` finds the original, and the
+commit that shrank it to this.
 
 ## What shipped, and what it proved
 
@@ -11,8 +11,8 @@ The build writes `.bunny/build.json`. The CLI reads it, so it deploys this
 adapter without knowing anything about Astro.
 
 ```bash
-bunny deploy      # provision, build, upload, publish
-bunny rollback    # back to the deploy that was live before
+bunny sites deploy                           # provision, build, upload, publish
+bunny sites deployments publish --previous   # back to the deploy that was live before
 ```
 
 Verified against a real account on 2026-08-19, with a fresh
@@ -20,7 +20,7 @@ Verified against a real account on 2026-08-19, with a fresh
 
 | Check                                     | Result                                                      |
 | ----------------------------------------- | ----------------------------------------------------------- |
-| Adapter offered, installed, config edited | `output: "server"` and `adapter: bunny()` written for us    |
+| Adapter offered, installed, config edited | `adapter: bunny()` written for us, and `output` left alone  |
 | Site provisioned from nothing             | storage zone, script, pull zone, all named `sites-<name>-*` |
 | Server-rendered page                      | 200, `private, no-store`, a new time on each request        |
 | Prerendered page from Storage             | 200, `public, max-age=60`                                   |
@@ -41,8 +41,8 @@ Three things turned out differently from the design:
   reported success while the site still served the previous release.
 - **No `requires.cliVersion` floor is set yet.** Both sides are unreleased, so
   there is no version to rule out. `manifestVersion` already stops a CLI that
-  cannot read the shape, and a CLI without `bunny deploy` has no command to run.
-  Set a floor once a released CLI has to be ruled out.
+  cannot read the shape, and an older CLI has no framework path at all. Set a
+  floor once a released CLI has to be ruled out.
 
 Phase 1 kept the standalone-script architecture the adapter already had: the
 script reads Storage over HTTP, with a read-only password the CLI sets. That is
@@ -93,8 +93,9 @@ stands.
 
 ## Phase 3 — preview environments
 
-`bunny deploy` publishes to production. `--preview` reports that this is not
-built yet, and that is the largest gap between the guide's promise and the CLI.
+A server build publishes to production, and `bunny sites deploy` says so. There
+is no `--preview` at all, and that is the largest gap between the guide's promise
+and the CLI.
 
 A framework site's preview cannot be a snapshot. One script publishes one release
 at a time, and the rendered page and its assets are one unit: an Astro server
@@ -108,8 +109,8 @@ site "my-site"
 └─ environment "preview" | "pr-42"  pull zone + script, same storage zone
 ```
 
-- `bunny deploy` updates the site's `preview` environment; `--prod` publishes to
-  production; `--preview pr-42` creates and updates that one.
+- `bunny sites deploy` updates the site's `preview` environment; `--prod`
+  publishes to production; `--preview pr-42` creates and updates that one.
 - Promotion is already build-once-deploy-anywhere: every deploy's bundle is in
   storage, so publishing deploy X to production reads it back and publishes it.
   `republishDeploy` in the CLI does exactly this today.
@@ -125,20 +126,20 @@ into the static model and only the CLI changes.
 ## Phase 4 — the rest of the loop
 
 - **`bunny ci init` for framework sites.** The workflow shape is the same:
-  `bunny deploy --preview pr-N` on a pull request, `bunny deploy --prod` on a
-  merge, and the preview URL as a comment. Needs `BunnyWay/actions/deploy-site` to
-  accept a preview name.
+  `bunny sites deploy --preview pr-N` on a pull request, and
+  `bunny sites deploy --prod` on a merge, with the preview URL as a comment.
+  Needs `BunnyWay/actions/deploy-site` to accept a preview name.
 - **`bunny env` at the top level,** mapped to the live environment's script, with
   `bunny env pull` into `.env`. Today it is `bunny scripts env set`, which means
   knowing which script id belongs to which site.
 - **`bunny logs`.** Logs are dashboard-only, so this needs an API first. Leave it
   out of the guide until it exists.
 - **`bunny init astro`.** Scaffold a project with the adapter already in place,
-  so the first command is `bunny init` and the second is `bunny deploy`.
-- **Adopt an existing site.** `scripts/deploy-demo.mjs` now runs `bunny deploy`,
-  which will create a new CLI-managed site rather than reuse the demo's existing
-  zone and script. A `bunny link` that adopts a hand-built pair would fix that,
-  and it is what the guide's "Moving from `bunny-astro`" section promises.
+  so the first command is `bunny init` and the second is `bunny sites deploy`.
+- **Adopt an existing site.** `scripts/deploy-demo.mjs` now runs
+  `bunny sites deploy`, which creates a new CLI-managed site rather than reuse the
+  demo's existing zone and script. A `bunny link` that adopts a hand-built pair
+  would fix that, and the guide's "Moving from `bunny-astro`" section promises it.
 
 ## Open questions
 

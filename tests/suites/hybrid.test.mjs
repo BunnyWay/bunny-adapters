@@ -4,7 +4,7 @@
  * Since Astro 5 this is the default shape: pages are prerendered, and a page
  * opts out with `export const prerender = false`. The adapter used to read
  * `output` to decide whether a server was needed. On a project like this one it
- * answered "no", wrote a manifest that named no script, and `bunny deploy`
+ * answered "no", wrote a manifest that named no script, and `bunny sites deploy`
  * uploaded the files alone. The site went up with every dynamic route missing,
  * and nothing said so. That is what this suite is here to stop.
  */

@@ -43,7 +43,7 @@ export default defineConfig({
 ## Deploy
 
 ```bash
-bunny deploy
+bunny sites deploy
 ```
 
 That is the whole thing. The [bunny CLI](https://bunny.net/docs/cli) builds the
@@ -61,7 +61,7 @@ Each deploy goes to its own folder in the zone, and the build writes
 page and the assets it names together:
 
 ```bash
-bunny deploy            # build and publish
+bunny sites deploy            # build and publish
 bunny rollback          # back to the deploy that was live before
 bunny sites deployments list
 ```
@@ -80,13 +80,13 @@ bundles whenever they change, so a script deployed against last build's files
 loses its styles.
 
 Set `BUNNY_ASSET_PREFIX` when the files are in a folder rather than at the zone
-root. `bunny deploy` sets it for you, in the bundle itself.
+root. `bunny sites deploy` sets it for you, in the bundle itself.
 
 </details>
 
 ## Configure the script
 
-`bunny deploy` sets all of these. The table is here for a deploy you run
+`bunny sites deploy` sets all of these. The table is here for a deploy you run
 yourself, and for reading a script's settings in the dashboard.
 
 | Variable             | Purpose                                                          |
@@ -157,13 +157,13 @@ no Deno.
 ## A site with no server
 
 A build whose every route is prerendered deploys no script. Astro reports it as
-a static build, the adapter hands that answer back, and `bunny deploy` uploads
+a static build, the adapter hands that answer back, and `bunny sites deploy` uploads
 `dist/client` to a storage zone. The `bunny sites` router serves it, and nothing
 is invoked per request:
 
 ```
 [@bunny.net/astro-adapter] Every route is prerendered, so this build deploys no
-script: `bunny deploy` uploads dist/client, and the site is served as files.
+script: `bunny sites deploy` uploads dist/client, and the site is served as files.
 ```
 
 Files alone cannot answer a 404 with a page, send a redirect, or add a header.
@@ -268,7 +268,7 @@ the object again.
 `Astro.session` works out of the box. Each session is one object in a Bunny
 Storage zone, so every edge node reads the same value.
 
-`bunny deploy` sets this up: sessions go under `_sessions/` in the site's own
+`bunny sites deploy` sets this up: sessions go under `_sessions/` in the site's own
 storage zone, which nothing serves, and only the session driver gets the
 password that can write.
 
@@ -326,7 +326,7 @@ file extensions, and HTML is not one of them. It is on by default, and while it
 is on a `routeRules` entry has no effect: the page is rendered again for every
 request.
 
-`bunny deploy` turns it off, because the build manifest asks for that. For a
+`bunny sites deploy` turns it off, because the build manifest asks for that. For a
 deploy you run yourself:
 
 ```bash
@@ -394,7 +394,7 @@ What does not work is a package with a native binary. `sharp` is the usual one.
 
 A pull zone created for a script has **Disable cookies** switched on, which
 strips `Set-Cookie` from every response. The build manifest asks for it to be
-off, so `bunny deploy` turns it off and reports the change.
+off, so `bunny sites deploy` turns it off and reports the change.
 
 For a deploy you run yourself:
 
@@ -448,7 +448,7 @@ switch it off.
 
 ## The build manifest
 
-The build writes `.bunny/build.json`, which is how `bunny deploy` knows what to
+The build writes `.bunny/build.json`, which is how `bunny sites deploy` knows what to
 deploy without knowing anything about Astro:
 
 ```jsonc
@@ -505,7 +505,7 @@ An endpoint in `src/pages/api/` keeps its own 404, so a JSON client is never
 handed a web page.
 
 **Prerendered pages 404.** The files and the script are out of step. Run
-`bunny deploy`, which sends both, and `bunny rollback` while you look.
+`bunny sites deploy`, which sends both, and `bunny rollback` while you look.
 
 **A POST returns 403.** Astro checks the request origin for server output. This
 is Astro's CSRF protection. Adjust `security.checkOrigin` if you need to.

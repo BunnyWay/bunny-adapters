@@ -236,7 +236,7 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
 				const clientPath = relativeTo(rootDir, fileURLToPath(clientDir));
 
 				// A build with no route to render on demand needs nothing of ours at
-				// run time. `bunny deploy` uploads the files, and the `bunny sites`
+				// run time. `bunny sites deploy` uploads the files, and the `bunny sites`
 				// router serves them: it answers a miss with `404.html`, and it reads
 				// `_redirects` and `_headers`. Every static framework gets the same,
 				// and a site with no server should not carry a megabyte of one.
@@ -247,7 +247,7 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
 					});
 
 					logger.info(
-						`Every route is prerendered, so this build deploys no script: \`bunny deploy\` uploads ${clientPath}, and the site is served as files.`,
+						`Every route is prerendered, so this build deploys no script: \`bunny sites deploy\` uploads ${clientPath}, and the site is served as files.`,
 					);
 					logger.info(
 						'Nothing here needs the adapter. Keep it for the day a route renders per request, and ' +
@@ -276,7 +276,7 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
 						}
 					}
 
-					// What `bunny deploy` reads. A static build asks for no script, no
+					// What `bunny sites deploy` reads. A static build asks for no script, no
 					// variable, and no pull zone setting: the files are the whole deploy.
 					const staticManifest = await writeBuildManifest(rootDir, {
 						manifestVersion: MANIFEST_VERSION,
@@ -286,7 +286,7 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
 						assets: { dir: clientPath },
 						dev: { command: 'astro dev', preview: 'astro preview' },
 					});
-					logger.info(`Wrote ${staticManifest}. Deploy it with: bunny deploy`);
+					logger.info(`Wrote ${staticManifest}. Deploy it with: bunny sites deploy`);
 					return;
 				}
 
@@ -380,7 +380,7 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
 					logger.info(`Answering ${count} prerendered redirect(s) in the script.`);
 				}
 
-				// What `bunny deploy` reads. The CLI knows no framework, so everything
+				// What `bunny sites deploy` reads. The CLI knows no framework, so everything
 				// it needs about this build has to be in here.
 				const manifestFile = await writeBuildManifest(rootDir, {
 					manifestVersion: MANIFEST_VERSION,
@@ -391,7 +391,7 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
 					assets: { dir: clientPath },
 					requires: {
 						// No `cliVersion` floor yet. `manifestVersion` already stops a CLI
-						// that cannot read this shape, and a CLI without `bunny deploy` has
+						// that cannot read this shape, and a CLI without `bunny sites deploy` has
 						// no command to run. Set a floor here once a released CLI version
 						// needs to be ruled out.
 						pullZone: {
@@ -443,7 +443,7 @@ export default function bunny(options: BunnyAdapterOptions = {}): AstroIntegrati
 					},
 					dev: { command: 'astro dev', preview: 'astro preview' },
 				});
-				logger.info(`Wrote ${manifestFile}. Deploy it with: bunny deploy`);
+				logger.info(`Wrote ${manifestFile}. Deploy it with: bunny sites deploy`);
 			},
 		},
 	};

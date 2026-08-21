@@ -8,7 +8,7 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "deploy": "bunny deploy",
+    "deploy": "bunny sites deploy",
     "astro": "astro"
   },
   "dependencies": {

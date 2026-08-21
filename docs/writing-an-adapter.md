@@ -13,8 +13,9 @@ and it holds no build output. So every adapter here does four things:
 2. **Serve.** Answer each request with the framework's own request handler.
 3. **Delegate.** Read hashed assets and prerendered pages from Bunny Storage,
    because they cannot live in the script.
-4. **Declare.** Write a [build manifest](#the-build-manifest), so `bunny deploy`
-   can deploy the result without knowing anything about the framework.
+4. **Declare.** Write a [build manifest](#the-build-manifest), so
+   `bunny sites deploy` can deploy the result without knowing anything about the
+   framework.
 
 ```
 browser ──▶ pull zone ──▶ Edge Script (the framework's handler)
@@ -30,9 +31,31 @@ browser ──▶ pull zone ──▶ Edge Script (the framework's handler)
 | Package   | `@bunny.net/<framework>-adapter` | `@bunny.net/astro-adapter` |
 | Example   | `examples/<framework>-showcase`  | `examples/astro-showcase`  |
 
-An adapter ships no deploy command of its own. `bunny deploy` deploys every
+An adapter ships no deploy command of its own. `bunny sites deploy` deploys every
 adapter, and the package name above is what the CLI's framework detection looks
 for.
+
+### Making the adapter discoverable
+
+`bunny sites deploy` offers the adapter, and the CLI decides when to offer it.
+Two things in the CLI repository hold that answer, and a new adapter adds to
+both:
+
+| Where                       | What it holds                                         |
+| --------------------------- | ----------------------------------------------------- |
+| `sites/ci/frameworks.ts`    | The framework preset, and this adapter's package name |
+| `sites/framework/detect.ts` | Which signals mean the project asks for a server      |
+
+The second one matters more than it looks. A project that renders every page
+ahead of time deploys as a directory of files, and it must never be offered a
+server it does not want. So name the signals that mean the developer already
+asked for one. For Astro they are: another vendor's adapter in the config,
+`output: "server"`, this adapter as a dependency, and a route with
+`prerender = false`.
+
+Pick signals the framework itself acts on. A signal that only the adapter would
+recognise tells the developer nothing, and a project the CLI reads wrongly either
+hears an offer it does not need, or meets the framework's own build error.
 
 ## Package layout
 
@@ -252,7 +275,7 @@ names the section here that states the rule.
 An adapter reports what a build needs. It never decides how the host serves it.
 
 So a build with no route to render per request writes no script at all. It
-reports `kind: "static"`, and `bunny deploy` uploads the files: the
+reports `kind: "static"`, and `bunny sites deploy` uploads the files: the
 `bunny sites` router serves them, exactly as it serves a Hugo site. Ask the
 framework whether a server is needed, and never read a config field that only
 sets a default. Astro's `output` is such a field, and reading it deployed three
@@ -280,7 +303,7 @@ prerenders the last dynamic route is hostile.
 ## The build manifest
 
 The CLI knows no framework. At the end of the build, write
-`.bunny/build.json` at the project root, and `bunny deploy` knows what to do
+`.bunny/build.json` at the project root, and `bunny sites deploy` knows what to do
 with the result. A new adapter needs no new CLI release.
 
 ```jsonc
@@ -331,7 +354,7 @@ Rules:
 
 ### Which deploy this script is
 
-`bunny deploy` puts each build in its own folder in the zone, and writes the
+`bunny sites deploy` puts each build in its own folder in the zone, and writes the
 folder's name into the top of the bundle:
 
 ```js
