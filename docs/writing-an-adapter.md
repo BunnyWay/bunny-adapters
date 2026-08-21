@@ -57,6 +57,146 @@ Most `node:` built-ins are available, including `node:fs` over a virtual file
 system. That file system is per isolate and lives in memory, so it is a scratch
 pad and never a store. Persistent state belongs in Bunny Storage.
 
+## Code style
+
+An adapter is read by the framework's community, and not by us. An Astro
+developer opens `packages/astro` after reading `@astrojs/cloudflare`, and a Nuxt
+developer opens `packages/nuxt` after reading a Nitro preset. Each one must find
+the code they expect.
+
+So an adapter takes its style from the framework it adapts. This repository
+imposes only the short list below, and every other rule comes from the
+framework. Do not carry one adapter's idiom into the next one.
+
+### What every adapter shares
+
+These rules come from Edge Scripting, and no framework overrides them:
+
+- A script has 500 ms to start. Keep the module top level cheap, and add no
+  dependency the runtime can do without.
+- Read every secret from the script environment at run time. Nothing reaches the
+  bundle or the config.
+- Detect a capability with `typeof X !== "undefined"`. One file runs on the
+  edge, on Deno, and under a test.
+- Read the environment through one small helper, and never from `process` or
+  `Deno` at the call site.
+- A missing file is not an exception. The request path answers with a page or a
+  status, and it throws nothing.
+- Report a broken configuration once per isolate. A message on every request
+  buries the log and adds nothing.
+- A comment says why the code has to exist. It carries the measurement, the
+  limit, or the bug that made it necessary, with the date. `START_RISK_SIZE` in
+  `packages/astro/src/build/bundle.ts` is the example: it holds both sizes and
+  the month we measured them.
+- Every public option carries a doc comment and a `@default`. That comment is
+  the reference documentation, so write it for a user.
+
+### What every adapter takes from its framework
+
+Answer these questions before you write the first line. Read three of the
+framework's own adapters or presets, and read its formatter config. Most
+frameworks publish no prose style guide, so the code and the config are the
+guide.
+
+| Question                                    | Where the answer is                     |
+| ------------------------------------------- | --------------------------------------- |
+| Formatter, indent, quotes, line width       | The config file at the repository root  |
+| Import extension: `.js`, `.ts`, or none     | Any source file                         |
+| Functions, factories, or classes            | The three adapters you read             |
+| The error type a build failure throws       | Their build-time entry                  |
+| The logger, at build time and at run time   | The same file                           |
+| Option types: one shape, or user + resolved | Their `types.ts`                        |
+| The utility libraries the community expects | Their dependencies, and their AGENTS.md |
+| Comment density, and JSDoc conventions      | Measure it, do not guess                |
+| File and directory names                    | Their `src/` tree                       |
+
+Then copy the answers. Deviate only for a reason, and write the reason down in
+the subsection below. A deviation nobody recorded looks like a mistake to the
+next contributor, and it is one to the community.
+
+The survey belongs in the plan for that adapter, in `plans/`. Its answer moves
+into a subsection here when the adapter merges.
+
+### Astro
+
+Surveyed in August 2026, against `@astrojs/node`, `@astrojs/cloudflare`,
+`@astrojs/netlify`, and `@astrojs/vercel`. All four now live in the
+`withastro/astro` monorepo, under `packages/integrations/`. The old
+`withastro/adapters` repository is archived, so do not read it.
+
+| Convention      | What the official adapters do                                            |
+| --------------- | ------------------------------------------------------------------------ |
+| Formatter       | Biome. Tabs, single quotes, 100 columns, semicolons always               |
+| Imports         | Explicit `.js` extension, `import type` for types                        |
+| Shape           | Functions and object literals. One class in about 6,700 lines            |
+| Entry           | `export default function createIntegration(options)`                     |
+| Adapter object  | A separate `getAdapter()`, called from `astro:config:done`               |
+| Build failure   | `AstroError` from `astro/errors`, which renders with a hint              |
+| Runtime failure | Plain `Error`. `astro/errors` does not belong in a bundle                |
+| Options         | `UserOptions` for what the user writes, `Options` for the resolved shape |
+| Runtime config  | A virtual module from a `vite-plugin-config.ts`                          |
+| Helpers         | `utils/` or `lib/`, one subject per file, kebab-case names               |
+| Cache provider  | `cache/index.ts` and `cache/provider.ts`                                 |
+| Comment density | 14% to 21% of non-blank lines                                            |
+
+So Astro adapters are written with functions and plain data. State lives in a
+closure, and a factory returns an object of methods. `createStorage` in
+`src/runtime/storage.ts` is that pattern, and it matches
+`cloudflare/src/utils/cf.ts` closely.
+
+Three reasons hold the pattern in place, and none of them is taste:
+
+1. Every contract Astro offers is already an object literal. An integration, a
+   session driver, and a cache provider all are. A class only wraps the shape
+   Astro asked for.
+2. A method with no `this` survives being passed as a callback. Nothing needs
+   `bind`, and nothing breaks when a handler travels.
+3. Class machinery is bytes in a script that has 10 MB and 500 ms.
+
+Where `packages/astro` differs from the four, and why:
+
+| Difference                                    | Why                                                                                                    |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Prettier, spaces, double quotes               | The repository formats every workspace with one Prettier config. A per-package override can close this |
+| Comments on 35% of lines                      | The measured limits of this platform are written nowhere else. Keep them                               |
+| `build/` and `runtime/` instead of `utils/`   | The split is load-bearing here: one tree bundles into the script, the other never does                 |
+| `cache.ts` instead of `cache/provider.ts`     | One file, one provider. Split it when it grows                                                         |
+| Plain `Error` for the build-time size failure | Not deliberate. Use `AstroError` for a failure the user has to fix                                     |
+| `define` instead of a virtual config module   | Older Astro convention, and it still works. Move when we next touch it                                 |
+
+### Nuxt
+
+Not built. Surveyed in August 2026 so the shape is known, because it is not the
+shape of this repository.
+
+A Nuxt deployment target is a **Nitro preset**, and not a package like
+`packages/astro`. `nitrojs/nitro` holds every preset in `src/presets/<name>`,
+with build-time config in `preset.ts` and the script entry in `runtime/`. A
+preset is a `defineNitroPreset({ ... })` object.
+
+Nitro's `AGENTS.md` states its conventions, so read that file first. What it
+already says, and what differs from Astro:
+
+- `oxlint` and `oxfmt`, not Biome and not Prettier. Two-space indent, and
+  double quotes.
+- Imports carry a `.ts` extension, not `.js`.
+- `pathe` replaces `node:path`. `defu` merges config. `consola` logs at build
+  time, and `console` logs at run time.
+- `unstorage` is the storage abstraction the community expects.
+- Runtime code stays runtime-agnostic and side-effect free, which agrees with
+  our own list above.
+
+So decide the delivery shape before the style: a preset upstream in Nitro, or a
+module the user names in `nitro.preset`. That choice sets the directory, the
+package, and the tests.
+
+### Formatting
+
+Each package is formatted by the tool its framework uses, and
+`npm run format` applies it. Configure the difference in the repository's
+Prettier config, or give the package its own tool. Never hand-format around
+either one, and never argue with it in review.
+
 ## The build contract
 
 - Bundle with esbuild, `platform: "neutral"`, `format: "esm"`.

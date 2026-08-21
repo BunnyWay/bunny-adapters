@@ -48,6 +48,10 @@ needs a bunny.net account.
   export condition. Test the bundle on Deno, not on Node.
 - **No secret at build time.** A storage password or an API key is read from the
   script environment at runtime. It never enters the bundle or the config.
+- **Each adapter follows its own framework's code style, not ours.** Survey the
+  framework's own adapters first, and record the answer in
+  `docs/writing-an-adapter.md`. Only the platform rules in that document's
+  "What every adapter shares" apply to all of them.
 - **Every user-visible change needs a changeset.** Run `npm run changeset`.
 - Keep the adapter's runtime code small. A script has 500 ms to start, and 10 MB.
 
