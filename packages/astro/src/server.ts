@@ -7,14 +7,14 @@
  *
  * Keep this file small. A script has 500 ms to start.
  */
-import { createApp } from "astro/app/entrypoint";
-import { setGetEnv } from "astro/env/setup";
-import * as BunnySDK from "@bunny.net/edgescript-sdk";
-import { assetPrefix } from "./runtime/deploy.js";
-import { contentType, isHtml } from "./runtime/mime.js";
-import { objectCandidates, resolveObject, stripBase } from "./runtime/paths.js";
-import { createStorage } from "./runtime/storage.js";
-import type { BuildManifest, BunnyRuntime, RuntimeOptions } from "./runtime/types.js";
+import { createApp } from 'astro/app/entrypoint';
+import { setGetEnv } from 'astro/env/setup';
+import * as BunnySDK from '@bunny.net/edgescript-sdk';
+import { assetPrefix } from './runtime/deploy.js';
+import { contentType, isHtml } from './runtime/mime.js';
+import { objectCandidates, resolveObject, stripBase } from './runtime/paths.js';
+import { createStorage } from './runtime/storage.js';
+import type { BuildManifest, BunnyRuntime, RuntimeOptions } from './runtime/types.js';
 
 /** Replaced with a literal by Vite, from the adapter options. */
 declare const __BUNNY_ADAPTER_OPTIONS__: RuntimeOptions;
@@ -31,18 +31,18 @@ declare const process: { env: Record<string, string | undefined> } | undefined;
 
 /** Read an environment variable on the edge, on Deno, or on Node. */
 function env(key: string): string | undefined {
-  if (typeof Deno !== "undefined") return Deno.env.get(key);
-  if (typeof process !== "undefined") return process.env[key];
-  return undefined;
+	if (typeof Deno !== 'undefined') return Deno.env.get(key);
+	if (typeof process !== 'undefined') return process.env[key];
+	return undefined;
 }
 
 setGetEnv((key) => env(key));
 
 const options = __BUNNY_ADAPTER_OPTIONS__;
 const build: BuildManifest =
-  typeof __BUNNY_BUILD_MANIFEST__ !== "undefined"
-    ? __BUNNY_BUILD_MANIFEST__
-    : { assets: null, headers: null, redirects: null };
+	typeof __BUNNY_BUILD_MANIFEST__ !== 'undefined'
+		? __BUNNY_BUILD_MANIFEST__
+		: { assets: null, headers: null, redirects: null };
 
 /**
  * The set of files the build produced. When it is present the script knows
@@ -51,22 +51,22 @@ const build: BuildManifest =
 const assets: ReadonlySet<string> | null = build.assets ? new Set(build.assets) : null;
 
 const storage = createStorage({
-  zone: options.storageZone || env("BUNNY_STORAGE_ZONE") || "",
-  host: options.storageHost || env("BUNNY_STORAGE_HOST") || "storage.bunnycdn.com",
-  key: env("BUNNY_STORAGE_KEY") || "",
-  // `bunny deploy` gives each deploy its own folder, and writes the name into
-  // the bundle. So this release can only read the files it was built with.
-  prefix: assetPrefix(),
+	zone: options.storageZone || env('BUNNY_STORAGE_ZONE') || '',
+	host: options.storageHost || env('BUNNY_STORAGE_HOST') || 'storage.bunnycdn.com',
+	key: env('BUNNY_STORAGE_KEY') || '',
+	// `bunny deploy` gives each deploy its own folder, and writes the name into
+	// the bundle. So this release can only read the files it was built with.
+	prefix: assetPrefix(),
 });
 
 /** Extend the isolate's life. A no-op away from the bunny.net network. */
 function waitUntil(promise: Promise<unknown>): void {
-  if (typeof Bunny !== "undefined" && Bunny?.v1?.waitUntil) {
-    Bunny.v1.waitUntil(promise);
-    return;
-  }
-  // Nothing keeps the isolate alive here, but a rejection must not go unheard.
-  void Promise.resolve(promise).catch(() => {});
+	if (typeof Bunny !== 'undefined' && Bunny?.v1?.waitUntil) {
+		Bunny.v1.waitUntil(promise);
+		return;
+	}
+	// Nothing keeps the isolate alive here, but a rejection must not go unheard.
+	void Promise.resolve(promise).catch(() => {});
 }
 
 /**
@@ -81,20 +81,20 @@ function waitUntil(promise: Promise<unknown>): void {
  * really does come from this machine.
  */
 function clientAddress(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for") ?? request.headers.get("x-real-ip");
-  return forwarded?.split(",")[0]?.trim() || "127.0.0.1";
+	const forwarded = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip');
+	return forwarded?.split(',')[0]?.trim() || '127.0.0.1';
 }
 
 /** Everything the edge knows about this request, for `Astro.locals.runtime`. */
 function runtimeContext(request: Request): BunnyRuntime {
-  return {
-    country: request.headers.get("cdn-requestcountrycode") ?? undefined,
-    requestId: request.headers.get("cdn-requestid") ?? undefined,
-    clientAddress: clientAddress(request),
-    waitUntil,
-    caches: typeof caches !== "undefined" ? caches : undefined,
-    env,
-  };
+	return {
+		country: request.headers.get('cdn-requestcountrycode') ?? undefined,
+		requestId: request.headers.get('cdn-requestid') ?? undefined,
+		clientAddress: clientAddress(request),
+		waitUntil,
+		caches: typeof caches !== 'undefined' ? caches : undefined,
+		env,
+	};
 }
 
 const app = createApp();
@@ -107,65 +107,65 @@ const app = createApp();
  * to treat every object as one blob, and a large file is only seekable once it
  * is fully cached.
  */
-const FETCH_REFINING_HEADERS = ["range", "if-range", "if-none-match", "if-modified-since"];
+const FETCH_REFINING_HEADERS = ['range', 'if-range', 'if-none-match', 'if-modified-since'];
 
 /** The subset of a request's headers that Storage should see. */
 function refiningHeaders(request: Request): Headers {
-  const forward = new Headers();
-  for (const name of FETCH_REFINING_HEADERS) {
-    const value = request.headers.get(name);
-    if (value) forward.set(name, value);
-  }
-  return forward;
+	const forward = new Headers();
+	for (const name of FETCH_REFINING_HEADERS) {
+		const value = request.headers.get(name);
+		if (value) forward.set(name, value);
+	}
+	return forward;
 }
 
 /** A response with no body of its own, whatever the object holds. */
 function isBodyless(status: number): boolean {
-  return status === 304 || status === 416;
+	return status === 304 || status === 416;
 }
 
 /** Turn a Storage response into the response the visitor gets. */
 function fromStorageResponse(object: string, upstream: Response, method: string): Response {
-  const type = contentType(object);
-  const headers = new Headers({
-    "content-type": type,
-    "cache-control": isHtml(type) ? options.pageCacheControl : options.assetCacheControl,
-    // Say the object can be fetched in pieces. A pull zone will not slice an
-    // object, and will not answer a range from its cache, unless the origin
-    // says it may.
-    "accept-ranges": "bytes",
-  });
+	const type = contentType(object);
+	const headers = new Headers({
+		'content-type': type,
+		'cache-control': isHtml(type) ? options.pageCacheControl : options.assetCacheControl,
+		// Say the object can be fetched in pieces. A pull zone will not slice an
+		// object, and will not answer a range from its cache, unless the origin
+		// says it may.
+		'accept-ranges': 'bytes',
+	});
 
-  // Let the pull zone and the browser revalidate instead of re-downloading,
-  // and let them ask for one piece at a time.
-  for (const name of ["etag", "last-modified", "content-range"]) {
-    const value = upstream.headers.get(name);
-    if (value) headers.set(name, value);
-  }
+	// Let the pull zone and the browser revalidate instead of re-downloading,
+	// and let them ask for one piece at a time.
+	for (const name of ['etag', 'last-modified', 'content-range']) {
+		const value = upstream.headers.get(name);
+		if (value) headers.set(name, value);
+	}
 
-  // Only when the body arrives as it is stored. A decompressed body is a
-  // different length from the one the header names.
-  if (!upstream.headers.get("content-encoding")) {
-    const length = upstream.headers.get("content-length");
-    if (length) headers.set("content-length", length);
-  }
+	// Only when the body arrives as it is stored. A decompressed body is a
+	// different length from the one the header names.
+	if (!upstream.headers.get('content-encoding')) {
+		const length = upstream.headers.get('content-length');
+		if (length) headers.set('content-length', length);
+	}
 
-  // Headers Astro asked for on this prerendered page, such as a CSP.
-  for (const [name, value] of build.headers?.[object] ?? []) {
-    headers.set(name, value);
-  }
+	// Headers Astro asked for on this prerendered page, such as a CSP.
+	for (const [name, value] of build.headers?.[object] ?? []) {
+		headers.set(name, value);
+	}
 
-  // 206 and the two bodyless answers are the visitor's, and anything else that
-  // got this far is a whole object.
-  const status = upstream.status === 206 || isBodyless(upstream.status) ? upstream.status : 200;
+	// 206 and the two bodyless answers are the visitor's, and anything else that
+	// got this far is a whole object.
+	const status = upstream.status === 206 || isBodyless(upstream.status) ? upstream.status : 200;
 
-  if (method === "HEAD" || isBodyless(status)) {
-    void upstream.body?.cancel();
-    // A 304 must not name a length, because it describes no body.
-    if (status === 304) headers.delete("content-length");
-    return new Response(null, { status, headers });
-  }
-  return new Response(upstream.body, { status, headers });
+	if (method === 'HEAD' || isBodyless(status)) {
+		void upstream.body?.cancel();
+		// A 304 must not name a length, because it describes no body.
+		if (status === 304) headers.delete('content-length');
+		return new Response(null, { status, headers });
+	}
+	return new Response(upstream.body, { status, headers });
 }
 
 /**
@@ -176,35 +176,35 @@ function fromStorageResponse(object: string, upstream: Response, method: string)
  * and a browser ignores `Location` on a 200.
  */
 function fromRedirects(pathname: string, method: string): Response | null {
-  if (!build.redirects) return null;
+	if (!build.redirects) return null;
 
-  const local = stripBase(pathname, options.base);
-  if (local === null) return null;
+	const local = stripBase(pathname, options.base);
+	if (local === null) return null;
 
-  for (const object of objectCandidates(local)) {
-    const entry = build.redirects[object];
-    if (!entry) continue;
-    // Astro's own rule when the route configured no status of its own.
-    const status = entry.status ?? (method === "GET" ? 301 : 308);
-    return new Response(null, {
-      status,
-      headers: { location: entry.to, "cache-control": options.pageCacheControl },
-    });
-  }
-  return null;
+	for (const object of objectCandidates(local)) {
+		const entry = build.redirects[object];
+		if (!entry) continue;
+		// Astro's own rule when the route configured no status of its own.
+		const status = entry.status ?? (method === 'GET' ? 301 : 308);
+		return new Response(null, {
+			status,
+			headers: { location: entry.to, 'cache-control': options.pageCacheControl },
+		});
+	}
+	return null;
 }
 
 /** True for the two methods that read an object and change nothing. */
 function isRead(method: string): boolean {
-  return method === "GET" || method === "HEAD";
+	return method === 'GET' || method === 'HEAD';
 }
 
 /** A stored object is read-only, whatever the visitor asked to do to it. */
 function methodNotAllowed(): Response {
-  return new Response(null, {
-    status: 405,
-    headers: { allow: "GET, HEAD", "cache-control": options.serverCacheControl },
-  });
+	return new Response(null, {
+		status: 405,
+		headers: { allow: 'GET, HEAD', 'cache-control': options.serverCacheControl },
+	});
 }
 
 /**
@@ -219,38 +219,38 @@ function methodNotAllowed(): Response {
  * on to Astro, which answers it with the site's own 404 page.
  */
 async function fromStorage(
-  pathname: string,
-  method = "GET",
-  forward?: Headers,
+	pathname: string,
+	method = 'GET',
+	forward?: Headers,
 ): Promise<Response | null> {
-  if (!storage.enabled) return null;
+	if (!storage.enabled) return null;
 
-  // The build on disk has no `base` prefix, and every request carries one.
-  const local = stripBase(pathname, options.base);
-  if (local === null) return null;
+	// The build on disk has no `base` prefix, and every request carries one.
+	const local = stripBase(pathname, options.base);
+	if (local === null) return null;
 
-  let candidates: string[];
-  if (assets) {
-    const object = resolveObject(local, assets);
-    if (!object) return null;
-    // The manifest already proves the object exists, so refuse without paying
-    // for a subrequest.
-    if (!isRead(method)) return methodNotAllowed();
-    candidates = [object];
-  } else {
-    candidates = objectCandidates(local);
-  }
+	let candidates: string[];
+	if (assets) {
+		const object = resolveObject(local, assets);
+		if (!object) return null;
+		// The manifest already proves the object exists, so refuse without paying
+		// for a subrequest.
+		if (!isRead(method)) return methodNotAllowed();
+		candidates = [object];
+	} else {
+		candidates = objectCandidates(local);
+	}
 
-  for (const object of candidates) {
-    const upstream = await storage.get(object, forward);
-    if (!upstream) continue;
-    if (!isRead(method)) {
-      void upstream.body?.cancel();
-      return methodNotAllowed();
-    }
-    return fromStorageResponse(object, upstream, method);
-  }
-  return null;
+	for (const object of candidates) {
+		const upstream = await storage.get(object, forward);
+		if (!upstream) continue;
+		if (!isRead(method)) {
+			void upstream.body?.cancel();
+			return methodNotAllowed();
+		}
+		return fromStorageResponse(object, upstream, method);
+	}
+	return null;
 }
 
 /**
@@ -263,15 +263,15 @@ async function fromStorage(
  * lifetime, because a missing path stays missing until the next deploy.
  */
 async function prerenderedErrorPageFetch(url: string): Promise<Response> {
-  const { pathname } = new URL(url);
-  const response = await fromStorage(pathname);
-  if (!response) throw new Error(`No prerendered error page for ${url}`);
+	const { pathname } = new URL(url);
+	const response = await fromStorage(pathname);
+	if (!response) throw new Error(`No prerendered error page for ${url}`);
 
-  const local = stripBase(pathname, options.base) ?? pathname;
-  if (/\/500(\.html|\/index\.html)?$/.test(local)) {
-    response.headers.set("cache-control", options.serverCacheControl);
-  }
-  return response;
+	const local = stripBase(pathname, options.base) ?? pathname;
+	if (/\/500(\.html|\/index\.html)?$/.test(local)) {
+		response.headers.set('cache-control', options.serverCacheControl);
+	}
+	return response;
 }
 
 /**
@@ -283,76 +283,76 @@ async function prerenderedErrorPageFetch(url: string): Promise<Response> {
  * route matched by `routeRules`, both keep what they set.
  */
 function withCacheControl(response: Response): Response {
-  if (response.headers.has("cache-control")) return response;
-  try {
-    response.headers.set("cache-control", options.serverCacheControl);
-    return response;
-  } catch {
-    // `Response.redirect()` and `Response.error()` give immutable headers, and
-    // Astro builds an external redirect with the first of the two. Writing to
-    // them throws, so copy the response instead of failing the request.
-    const headers = new Headers(response.headers);
-    headers.set("cache-control", options.serverCacheControl);
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers,
-    });
-  }
+	if (response.headers.has('cache-control')) return response;
+	try {
+		response.headers.set('cache-control', options.serverCacheControl);
+		return response;
+	} catch {
+		// `Response.redirect()` and `Response.error()` give immutable headers, and
+		// Astro builds an external redirect with the first of the two. Writing to
+		// them throws, so copy the response instead of failing the request.
+		const headers = new Headers(response.headers);
+		headers.set('cache-control', options.serverCacheControl);
+		return new Response(response.body, {
+			status: response.status,
+			statusText: response.statusText,
+			headers,
+		});
+	}
 }
 
 /** Handle one request. Exported so it can be tested or wrapped. */
 export async function handle(request: Request): Promise<Response> {
-  const render = {
-    addCookieHeader: true,
-    clientAddress: clientAddress(request),
-    locals: { runtime: runtimeContext(request) },
-    prerenderedErrorPageFetch,
-    waitUntil,
-  };
+	const render = {
+		addCookieHeader: true,
+		clientAddress: clientAddress(request),
+		locals: { runtime: runtimeContext(request) },
+		prerenderedErrorPageFetch,
+		waitUntil,
+	};
 
-  // 1. Astro owns this route. Render it now.
-  //
-  // A page that answers 404 with no body reaches back through
-  // `prerenderedErrorPageFetch` on its own, so the site's own 404 page comes
-  // out of Storage without the adapter doing anything here.
-  const routeData = app.match(request);
-  if (routeData) return withCacheControl(await app.render(request, { ...render, routeData }));
+	// 1. Astro owns this route. Render it now.
+	//
+	// A page that answers 404 with no body reaches back through
+	// `prerenderedErrorPageFetch` on its own, so the site's own 404 page comes
+	// out of Storage without the adapter doing anything here.
+	const routeData = app.match(request);
+	if (routeData) return withCacheControl(await app.render(request, { ...render, routeData }));
 
-  const { pathname } = new URL(request.url);
+	const { pathname } = new URL(request.url);
 
-  // 2. A redirect the build turned into a page. It answers with its status.
-  const redirect = fromRedirects(pathname, request.method);
-  if (redirect) return redirect;
+	// 2. A redirect the build turned into a page. It answers with its status.
+	const redirect = fromRedirects(pathname, request.method);
+	if (redirect) return redirect;
 
-  // 3. Not an Astro route. Look for an asset or a prerendered page.
-  const stored = await fromStorage(pathname, request.method, refiningHeaders(request));
-  if (stored) return stored;
+	// 3. Not an Astro route. Look for an asset or a prerendered page.
+	const stored = await fromStorage(pathname, request.method, refiningHeaders(request));
+	if (stored) return stored;
 
-  // 4. Nothing matched. Let Astro answer, which reaches back into Storage for
-  //    a prerendered 404 when the project has one.
-  return withCacheControl(await app.render(request, render));
+	// 4. Nothing matched. Let Astro answer, which reaches back into Storage for
+	//    a prerendered 404 when the project has one.
+	return withCacheControl(await app.render(request, render));
 }
 
 export function start(): void {
-  // On the bunny.net network the SDK ignores the listener and uses the
-  // platform's own. Off it, this is what lets `astro preview` and the test
-  // suite choose a free port instead of fighting over 8080.
-  //
-  // An empty variable is not nullish, so `??` would keep it and `Number("")`
-  // would give port 0. Fall back on anything that is not a real port number.
-  const requestedPort = Number(env("PORT") || env("BUNNY_PORT"));
-  const port =
-    Number.isInteger(requestedPort) && requestedPort >= 0 && requestedPort <= 65535
-      ? requestedPort
-      : 8080;
+	// On the bunny.net network the SDK ignores the listener and uses the
+	// platform's own. Off it, this is what lets `astro preview` and the test
+	// suite choose a free port instead of fighting over 8080.
+	//
+	// An empty variable is not nullish, so `??` would keep it and `Number("")`
+	// would give port 0. Fall back on anything that is not a real port number.
+	const requestedPort = Number(env('PORT') || env('BUNNY_PORT'));
+	const port =
+		Number.isInteger(requestedPort) && requestedPort >= 0 && requestedPort <= 65535
+			? requestedPort
+			: 8080;
 
-  // The SDK wants a dotted IPv4, and it throws on anything else. A name such
-  // as "localhost" is what a preview server usually passes, so map it back.
-  const requested = env("BUNNY_HOSTNAME") ?? "127.0.0.1";
-  const hostname = /^\d{1,3}(\.\d{1,3}){3}$/.test(requested) ? requested : "127.0.0.1";
+	// The SDK wants a dotted IPv4, and it throws on anything else. A name such
+	// as "localhost" is what a preview server usually passes, so map it back.
+	const requested = env('BUNNY_HOSTNAME') ?? '127.0.0.1';
+	const hostname = /^\d{1,3}(\.\d{1,3}){3}$/.test(requested) ? requested : '127.0.0.1';
 
-  BunnySDK.net.http.serve({ hostname, port }, handle);
+	BunnySDK.net.http.serve({ hostname, port }, handle);
 }
 
 start();

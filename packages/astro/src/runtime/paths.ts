@@ -18,18 +18,18 @@
  * URL, so a segment that kept it would climb out of the zone later.
  */
 export function toObjectPath(pathname: string): string {
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(pathname);
-  } catch {
-    // A malformed percent sequence is a scanner, not a visitor. Keep it raw;
-    // the filter below still removes anything dangerous.
-    decoded = pathname;
-  }
-  return decoded
-    .split(/[/\\]/)
-    .filter((part) => part !== "" && part !== "." && part !== "..")
-    .join("/");
+	let decoded: string;
+	try {
+		decoded = decodeURIComponent(pathname);
+	} catch {
+		// A malformed percent sequence is a scanner, not a visitor. Keep it raw;
+		// the filter below still removes anything dangerous.
+		decoded = pathname;
+	}
+	return decoded
+		.split(/[/\\]/)
+		.filter((part) => part !== '' && part !== '.' && part !== '..')
+		.join('/');
 }
 
 /**
@@ -45,7 +45,7 @@ export function toObjectPath(pathname: string): string {
  * and nothing else does.
  */
 export function encodeObjectPath(object: string): string {
-  return object.split("/").map(encodeURIComponent).join("/");
+	return object.split('/').map(encodeURIComponent).join('/');
 }
 
 /**
@@ -55,8 +55,8 @@ export function encodeObjectPath(object: string): string {
  * a site with no base costs no comparison at all.
  */
 export function normalizeBase(base: string | undefined): string {
-  const trimmed = (base ?? "").trim().replace(/^\/+|\/+$/g, "");
-  return trimmed === "" ? "" : `/${trimmed}`;
+	const trimmed = (base ?? '').trim().replace(/^\/+|\/+$/g, '');
+	return trimmed === '' ? '' : `/${trimmed}`;
 }
 
 /**
@@ -69,10 +69,10 @@ export function normalizeBase(base: string | undefined): string {
  * `null` rather than the path unchanged.
  */
 export function stripBase(pathname: string, base: string): string | null {
-  if (base === "") return pathname;
-  if (pathname === base) return "/";
-  if (pathname.startsWith(`${base}/`)) return pathname.slice(base.length);
-  return null;
+	if (base === '') return pathname;
+	if (pathname === base) return '/';
+	if (pathname.startsWith(`${base}/`)) return pathname.slice(base.length);
+	return null;
 }
 
 /**
@@ -84,13 +84,13 @@ export function stripBase(pathname: string, base: string): string | null {
  * under `build.format: "file"`.
  */
 export function objectCandidates(pathname: string): string[] {
-  const base = toObjectPath(pathname);
-  if (base === "") return ["index.html"];
+	const base = toObjectPath(pathname);
+	if (base === '') return ['index.html'];
 
-  const last = base.split("/").pop() ?? "";
-  if (last.includes(".")) return [base];
+	const last = base.split('/').pop() ?? '';
+	if (last.includes('.')) return [base];
 
-  return [`${base}/index.html`, `${base}.html`];
+	return [`${base}/index.html`, `${base}.html`];
 }
 
 /**
@@ -102,10 +102,10 @@ export function objectCandidates(pathname: string): string[] {
  * may only make 50 of them per request.
  */
 export function resolveObject(pathname: string, assets: ReadonlySet<string>): string | null {
-  for (const candidate of objectCandidates(pathname)) {
-    if (assets.has(candidate)) return candidate;
-  }
-  return null;
+	for (const candidate of objectCandidates(pathname)) {
+		if (assets.has(candidate)) return candidate;
+	}
+	return null;
 }
 
 /**
@@ -116,7 +116,7 @@ export function resolveObject(pathname: string, assets: ReadonlySet<string>): st
  * `http://127.0.0.1:8787`.
  */
 export function storageBase(host: string): string {
-  const trimmed = host.trim().replace(/\/+$/, "");
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  return `https://${trimmed}`;
+	const trimmed = host.trim().replace(/\/+$/, '');
+	if (/^https?:\/\//i.test(trimmed)) return trimmed;
+	return `https://${trimmed}`;
 }

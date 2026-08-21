@@ -1,0 +1,18 @@
+{
+  printWidth: 100,
+  singleQuote: false,
+  trailingComma: "all",
+  overrides: [
+    {
+      // Astro formats every official adapter with Biome: tabs, single quotes.
+      // A contributor reads `@astrojs/cloudflare` before this package, so the
+      // package matches it. Prettier does not copy Biome's wrapping exactly,
+      // and the two things a reader sees first are the indent and the quotes.
+      //
+      // JSON5, because strict JSON holds no comment, and this decision needs
+      // its reason next to it.
+      files: "packages/astro/**/*.{ts,mjs}",
+      options: { useTabs: true, singleQuote: true },
+    },
+  ],
+}

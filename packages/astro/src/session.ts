@@ -22,31 +22,31 @@
  * Bunny Storage does not expire an object, so `session.ttl` controls the cookie
  * and not the object. Delete stale objects yourself if the zone grows.
  */
-import { createStorage } from "./runtime/storage.js";
+import { createStorage } from './runtime/storage.js';
 
 export interface BunnySessionConfig {
-  /** Zone that holds the sessions. Defaults to `BUNNY_SESSION_ZONE`. */
-  zone?: string;
-  /** That zone's endpoint. Defaults to `BUNNY_SESSION_HOST`. */
-  host?: string;
-  /** Folder inside the zone. @default "_sessions" */
-  prefix?: string;
+	/** Zone that holds the sessions. Defaults to `BUNNY_SESSION_ZONE`. */
+	zone?: string;
+	/** That zone's endpoint. Defaults to `BUNNY_SESSION_HOST`. */
+	host?: string;
+	/** Folder inside the zone. @default "_sessions" */
+	prefix?: string;
 }
 
 /** Astro's driver contract. Astro wraps this in unstorage. */
 interface SessionDriver {
-  getItem(key: string): Promise<string | null>;
-  setItem(key: string, value: string): Promise<void>;
-  removeItem(key: string): Promise<void>;
+	getItem(key: string): Promise<string | null>;
+	setItem(key: string, value: string): Promise<void>;
+	removeItem(key: string): Promise<void>;
 }
 
 declare const Deno: { env: { get(key: string): string | undefined } } | undefined;
 declare const process: { env: Record<string, string | undefined> } | undefined;
 
 function env(key: string): string | undefined {
-  if (typeof Deno !== "undefined") return Deno.env.get(key);
-  if (typeof process !== "undefined") return process.env[key];
-  return undefined;
+	if (typeof Deno !== 'undefined') return Deno.env.get(key);
+	if (typeof process !== 'undefined') return process.env[key];
+	return undefined;
 }
 
 /**
@@ -56,51 +56,51 @@ function env(key: string): string | undefined {
  * could not traverse, but leaving no dots at all needs no second thought.
  */
 function objectFor(prefix: string, key: string): string {
-  const safe = key.replace(/[^A-Za-z0-9_-]/g, "_");
-  return `${prefix}/${safe}.json`;
+	const safe = key.replace(/[^A-Za-z0-9_-]/g, '_');
+	return `${prefix}/${safe}.json`;
 }
 
 export default function bunnySessionDriver(config: BunnySessionConfig = {}): SessionDriver {
-  const zone = config.zone || env("BUNNY_SESSION_ZONE") || env("BUNNY_STORAGE_ZONE") || "";
-  const host =
-    config.host || env("BUNNY_SESSION_HOST") || env("BUNNY_STORAGE_HOST") || "storage.bunnycdn.com";
-  const key = env("BUNNY_SESSION_KEY") || env("BUNNY_STORAGE_KEY") || "";
-  const prefix = (config.prefix ?? "_sessions").replace(/^\/+|\/+$/g, "");
+	const zone = config.zone || env('BUNNY_SESSION_ZONE') || env('BUNNY_STORAGE_ZONE') || '';
+	const host =
+		config.host || env('BUNNY_SESSION_HOST') || env('BUNNY_STORAGE_HOST') || 'storage.bunnycdn.com';
+	const key = env('BUNNY_SESSION_KEY') || env('BUNNY_STORAGE_KEY') || '';
+	const prefix = (config.prefix ?? '_sessions').replace(/^\/+|\/+$/g, '');
 
-  const storage = createStorage({ zone, host, key });
+	const storage = createStorage({ zone, host, key });
 
-  function requireZone(): void {
-    if (!storage.enabled) {
-      throw new Error(
-        "Sessions need a storage zone. Set BUNNY_SESSION_ZONE and BUNNY_SESSION_KEY on the script.",
-      );
-    }
-  }
+	function requireZone(): void {
+		if (!storage.enabled) {
+			throw new Error(
+				'Sessions need a storage zone. Set BUNNY_SESSION_ZONE and BUNNY_SESSION_KEY on the script.',
+			);
+		}
+	}
 
-  return {
-    async getItem(sessionKey) {
-      if (!storage.enabled) return null;
-      const response = await storage.get(objectFor(prefix, sessionKey));
-      return response ? await response.text() : null;
-    },
+	return {
+		async getItem(sessionKey) {
+			if (!storage.enabled) return null;
+			const response = await storage.get(objectFor(prefix, sessionKey));
+			return response ? await response.text() : null;
+		},
 
-    async setItem(sessionKey, value) {
-      requireZone();
-      try {
-        await storage.put(objectFor(prefix, sessionKey), value, "application/json");
-      } catch (cause) {
-        // The usual cause is the read-only password. Say so, because the raw
-        // 401 from Storage explains nothing.
-        throw new Error(
-          "Could not write the session. BUNNY_SESSION_KEY must be a password that can write.",
-          { cause },
-        );
-      }
-    },
+		async setItem(sessionKey, value) {
+			requireZone();
+			try {
+				await storage.put(objectFor(prefix, sessionKey), value, 'application/json');
+			} catch (cause) {
+				// The usual cause is the read-only password. Say so, because the raw
+				// 401 from Storage explains nothing.
+				throw new Error(
+					'Could not write the session. BUNNY_SESSION_KEY must be a password that can write.',
+					{ cause },
+				);
+			}
+		},
 
-    async removeItem(sessionKey) {
-      if (!storage.enabled) return;
-      await storage.delete(objectFor(prefix, sessionKey));
-    },
-  };
+		async removeItem(sessionKey) {
+			if (!storage.enabled) return;
+			await storage.delete(objectFor(prefix, sessionKey));
+		},
+	};
 }
