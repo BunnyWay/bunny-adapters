@@ -1,5 +1,9 @@
 # Make the Astro adapter read like an Astro adapter
 
+> **Built, 21 August 2026.** All four stages landed, in four commits plus the
+> reformat. What turned out differently, and what was verified, is at the end of
+> this document, under "As built".
+
 The August 2026 survey compared `packages/astro` with the four official
 adapters: `@astrojs/node`, `@astrojs/cloudflare`, `@astrojs/netlify`, and
 `@astrojs/vercel`. They live in `withastro/astro`, under
@@ -193,3 +197,64 @@ Add that sentence to the rules in `CLAUDE.md`.
 - The rule tables live in the script and in the document. Two copies can
   disagree. A machine-readable file that both read is the fix, and it is not
   worth building for one adapter. Revisit when the second adapter lands.
+
+## As built
+
+Four stages, five commits: the `AstroError` change, the reformat, the blame
+file, the style check, and the survey trigger.
+
+### What turned out differently
+
+- **The config file is `.prettierrc.json5`.** The plan wrote a `//` comment in
+  `.prettierrc.json`, and Prettier reads that name as strict JSON, so it
+  refused to load. JSON5 keeps the comment, and Prettier finds the file by that
+  name with no flag. Prettier then rewrites the file's own keys unquoted, which
+  is its style for JSON5.
+- **The size-limit message is `sizeLimitFailure`, and it returns both halves.**
+  It hands back `{ message, hint }`, and `index.ts` passes them to the two
+  arguments of `AstroError`. A function that returned one string would have put
+  the split back at the throw.
+- **The style script reads the syntax tree.** It imports the `typescript` the
+  packages already depend on, instead of matching text. A regular expression
+  fires on the word `any` in a comment, and misses `x!` inside a template. It
+  holds eight named rules, and an `import type` is exempt from the two import
+  rules, because the compiler erases it.
+- **The deny list holds `astro/errors` and `esbuild`, and no `node:` module.**
+  The plan's list was open-ended. `node:fs` went on it and came straight off:
+  "Package layout" in `docs/writing-an-adapter.md` says the runtime provides
+  `node:fs` over a virtual file system, so the rule would have been a false
+  positive against our own document.
+- **The `env()` rule checks only the modules the bundle reaches.** `preview.ts`
+  reads `process.env` to build the environment of the Deno child it spawns, and
+  that is correct code on Node. The rule exists because one file runs on the
+  edge and on Deno, so it holds where that is true.
+- **The document gained a section, not only rows.** Three rules the script
+  points at were not written down anywhere: the `build/` and `runtime/` import
+  split, `any` and `!`, and the checker itself. "The rules a formatter cannot
+  hold" is the new subsection, and the `build/` rule went into "Package
+  layout", where the two trees are described.
+- **Nothing was cut.** The virtual config module, the rename, the `cache.ts`
+  split and the comment density stay as the plan left them.
+
+### What was verified
+
+| Step                                     | Result                                                                                                                                              |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A build over the limit, by hand          | `SIZE_LIMIT` shrunk to 1 kB in `dist`, `tests/fixtures/hybrid` built: Astro printed the box, the five largest packages, and `Hint:` on its own line |
+| `npm run format:check`                   | Clean, on a clean tree                                                                                                                              |
+| `git blame packages/astro/src/server.ts` | Reaches through the reformat to commit `41e8641`, the real author                                                                                   |
+| `npm run check:style`                    | Passes                                                                                                                                              |
+| Each of the eight rules broken by hand   | Each one fired, and named itself. The tree was reverted after each                                                                                  |
+| `npm run test:all`                       | 122 unit tests, 156 fixture tests, every e2e check. No failures                                                                                     |
+| `npm run check`, `npm run lint:package`  | Clean                                                                                                                                               |
+
+### Still open
+
+The first open question stands: whether Prettier with tabs and single quotes
+reads close enough to Biome. Nobody outside this repository has read the result
+yet. If a contributor still finds the wrapping foreign, Biome for that one
+package is the answer, and the override becomes dead weight.
+
+The second one stands as written. The rule tables live in the script and in the
+document, and one adapter is not enough to justify a machine-readable file that
+both read. Revisit when the second adapter lands.
