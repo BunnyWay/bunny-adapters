@@ -54,6 +54,10 @@ needs a bunny.net account.
   framework's own adapters first, and record the answer in
   `docs/writing-an-adapter.md`. Only the platform rules in that document's
   "What every adapter shares" apply to all of them.
+- **A new major of a framework re-runs the survey.** Raising a peer range to a
+  new major means reading that framework's own adapters again in the same
+  change, and updating its table in `docs/writing-an-adapter.md` with what they
+  do now. An idiom moves on a major, and nobody raises a major by accident.
 - **Every user-visible change needs a changeset.** Run `npm run changeset`.
 - Keep the adapter's runtime code small. A script has 500 ms to start, and 10 MB.
 

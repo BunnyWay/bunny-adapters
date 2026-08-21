@@ -127,6 +127,11 @@ next contributor, and it is one to the community.
 The survey belongs in the plan for that adapter, in `plans/`. Its answer moves
 into a subsection here when the adapter merges.
 
+Then it goes stale, because a framework's own style moves. The trigger to redo it
+is the peer range: raise `astro`, or Nitro, to a new major, and survey again in
+that same change. A major is when an idiom moves, and it is not a version anybody
+raises by accident.
+
 ### Astro
 
 Surveyed in August 2026, against `@astrojs/node`, `@astrojs/cloudflare`,
