@@ -1,0 +1,12 @@
+---
+export const prerender = true;
+const builtAt = Date.now();
+---
+
+<html>
+  <head><style>body { color: #202020; }</style></head>
+  <body>
+    <p id="prerendered">yes</p>
+    <p id="built-at">{builtAt}</p>
+  </body>
+</html>

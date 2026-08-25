@@ -1,0 +1,21 @@
+node_modules/
+dist/
+.astro/
+*.tgz
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# Build output of the example sites.
+examples/*/dist/
+
+# Scratch output from the end-to-end runner.
+tests/.tmp/
+
+# Build output of the test fixtures.
+tests/fixtures/*/dist/
+tests/fixtures/*/.astro/
+
+# The build manifest `bunny deploy` reads. A build output, like dist/.
+.bunny/

@@ -1,0 +1,16 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+// Prerendered, so an unknown URL is answered from Storage.
+export const prerender = true;
+---
+
+<Layout title="Page not found" badge="404" lede="Nothing lives at this address.">
+  <div class="card">
+    <p style="margin: 0" id="not-found">
+      This page was built once and stored. The adapter reaches back into Bunny Storage for it
+      whenever a request matches no route.
+    </p>
+  </div>
+  <p style="margin-top: 1.5rem"><a class="button" href="/">Back to the start</a></p>
+</Layout>

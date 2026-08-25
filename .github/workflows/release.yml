@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+concurrency: release-${{ github.ref }}
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      # The lockfile is written by npm 11. npm 10, which Node 22 ships, resolves
+      # esbuild's platform packages elsewhere in the tree, and calls them missing.
+      - run: npm i -g npm@11
+
+      - run: npm ci
+      - run: npm run build
+
+      # CI is a separate workflow on the same event, so a red CI cannot
+      # stop this job. Run the tiers here instead, and publish nothing
+      # that has not passed them.
+      - run: npm run test:all
+
+      # Opens a release pull request while changesets are pending.
+      # Publishes to npm once that pull request merges.
+      #
+      # Every input here is a v2 name. v2 renamed all of them, and it stopped
+      # reading GITHUB_TOKEN from the environment. An unknown `with:` input only
+      # warns, so a step left on the v1 names would run with no version and no
+      # publish script, and would quietly never publish.
+      - uses: changesets/action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          version-script: npm run version-packages
+          publish-script: npm run release
+          commit-message: "Release the adapters"
+          pr-title: "Release the adapters"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"

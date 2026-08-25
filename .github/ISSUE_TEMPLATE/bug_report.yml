@@ -1,0 +1,54 @@
+name: Bug report
+description: An adapter does not behave as documented.
+labels: ["bug", "triage"]
+body:
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      options:
+        - "@bunny.net/astro-adapter"
+        - "Something else"
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Adapter, framework, Node, and the output of `bunny --version`.
+      placeholder: "adapter 0.2.0, astro 7.2.3, node 22.11.0, bunny 0.13.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Say what you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: >
+        A link to a minimal repository helps most. Otherwise list the steps.
+        `examples/astro-showcase` is a good starting point.
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Your adapter configuration
+      description: The `bunny()` call from your Astro config.
+      render: js
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Build output, or `bunny scripts logs`. Remove every password first.
+      render: shell

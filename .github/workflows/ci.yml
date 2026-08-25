@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    # Astro 7 is a peer dependency, and it needs Node 22.12 or later, so
+    # that is the floor both package.json files ask for. Test the floor
+    # and the current release.
+    name: Types, format, unit tests (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      # The lockfile is written by npm 11. npm 10, which Node 22 ships,
+      # resolves esbuild's platform packages to other places in the tree and
+      # then calls them missing. One lockfile cannot satisfy both, so pin npm.
+      - run: npm i -g npm@11
+
+      - run: npm ci
+      - run: npm run build
+      - run: npm run check
+      - run: npm run check:style
+      - run: npm run format:check
+      - run: npm run test --workspaces --if-present
+      - run: npm run lint:package
+
+  e2e:
+    name: End to end on Deno
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      # The lockfile is written by npm 11. See the comment in the job above.
+      - run: npm i -g npm@11
+
+      - run: npm ci
+      - run: npm run build
+
+      # Builds the showcase, serves dist/client from a local Storage
+      # emulator, runs the bundle on Deno, and asserts every route.
+      # No bunny.net credential is needed.
+      - run: node tests/e2e.mjs
+
+      # One small Astro project per configuration: a base path, a build
+      # format, redirects, islands, actions, and the rest. Each one builds,
+      # runs on Deno behind the same emulator, and is asserted.
+      - run: node --test --test-concurrency=4 tests/suites/*.test.mjs

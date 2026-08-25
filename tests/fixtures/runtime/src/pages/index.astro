@@ -1,0 +1,13 @@
+---
+const now = Date.now();
+const runtime = Astro.locals.runtime;
+---
+
+<html>
+  <body>
+    <p id="rendered-at">{now}</p>
+    <p id="country">{runtime?.country ?? "none"}</p>
+    <p id="request-id">{runtime?.requestId ?? "none"}</p>
+    <p id="client-address">{Astro.clientAddress}</p>
+  </body>
+</html>

@@ -1,0 +1,20 @@
+---
+import { getCollection, render } from "astro:content";
+
+export const prerender = true;
+
+export async function getStaticPaths() {
+  const notes = await getCollection("notes");
+  return notes.map((note) => ({ params: { id: note.id }, props: { note } }));
+}
+
+const { note } = Astro.props;
+const { Content } = await render(note);
+---
+
+<html>
+  <body>
+    <h1 id="title">{note.data.title}</h1>
+    <div id="body"><Content /></div>
+  </body>
+</html>
