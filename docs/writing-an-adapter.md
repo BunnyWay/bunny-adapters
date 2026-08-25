@@ -432,3 +432,10 @@ a build command, and gets the whole harness.
 ## Release
 
 Changesets. Add one with the change, and the merge to `main` publishes it.
+
+The release job carries no npm token. npm trusted publishing exchanges the
+workflow's OIDC token for a short-lived credential, and npm signs the provenance
+itself. Two things hold it together, and both must agree: the workflow keeps
+`id-token: write`, and the package's trusted publisher on npmjs.com names this
+repository and `release.yml`. So renaming that file, or publishing from another
+workflow, needs the npm setting changed in the same hour.

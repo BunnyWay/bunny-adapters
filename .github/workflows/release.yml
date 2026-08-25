@@ -31,7 +31,9 @@ jobs:
 
       # The lockfile is written by npm 11. npm 10, which Node 22 ships, resolves
       # esbuild's platform packages elsewhere in the tree, and calls them missing.
-      - run: npm i -g npm@11
+      # `npm -v` goes in the log because trusted publishing needs 11.5.1 or
+      # later. A silent downgrade would fail the publish, not the install.
+      - run: npm i -g npm@11 && npm -v
 
       - run: npm ci
       - run: npm run build
@@ -55,6 +57,12 @@ jobs:
           publish-script: npm run release
           commit-message: "Release the adapters"
           pr-title: "Release the adapters"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: "true"
+        # No npm token. npm trusted publishing exchanges the workflow's OIDC
+        # token for a short-lived credential, which is what `id-token: write`
+        # above is for. It needs npm 11.5.1 or later and Node 22.14 or later,
+        # and the steps above install both. npm signs the provenance itself
+        # this way, so NPM_CONFIG_PROVENANCE is gone too.
+        #
+        # npmjs.com holds the other half: the package's trusted publisher names
+        # this repository and this file. Rename this file, or move the publish
+        # into another workflow, and npm refuses the release.
