@@ -5,7 +5,4 @@ contact_links:
     about: Guides, limits, and the runtime API reference.
   - name: bunny.net support
     url: https://dash.bunny.net/support
-    about: Account, billing, pull zone, and storage zone questions.
-  - name: Security report
-    url: https://github.com/BunnyWay/bunny-adapters/security/policy
-    about: Report a vulnerability in private. Never in an issue.
+    about: Account, billing, and storage questions. Also a vulnerability report, which never goes in an issue.

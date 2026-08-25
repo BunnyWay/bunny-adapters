@@ -156,8 +156,8 @@ Then copy the answers. Deviate only for a reason, and write the reason down in
 the subsection below. A deviation nobody recorded looks like a mistake to the
 next contributor, and it is one to the community.
 
-The survey belongs in the plan for that adapter, in `plans/`. Its answer moves
-into a subsection here when the adapter merges.
+Do the survey before you write the adapter. Its answer moves into a subsection
+here when the adapter merges, and the commit message holds the reasoning.
 
 Then it goes stale, because a framework's own style moves. The trigger to redo it
 is the peer range: raise `astro`, or Nitro, to a new major, and survey again in

@@ -12,7 +12,6 @@ Framework adapters for bunny.net Edge Scripting. npm workspaces monorepo.
 | `tests/suites/*`             | The suite that asserts each fixture                                    |
 | `tests/`                     | The shared runner and harness                                          |
 | `docs/writing-an-adapter.md` | The contract every new adapter follows                                 |
-| `plans/`                     | Design documents for work that is not done yet. Often empty            |
 
 The Bunny Storage emulator is `startLocalZone`, in
 `packages/astro/src/build/local-zone.ts`. `astro preview` and every test tier
@@ -22,7 +21,6 @@ use it.
 
 ```bash
 npm install           # links every workspace
-git config blame.ignoreRevsFile .git-blame-ignore-revs  # skip the reformat commits
 npm run build         # compiles each package
 npm run check         # TypeScript, strict, no emit
 npm run check:style   # the style rules Prettier cannot hold

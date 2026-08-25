@@ -77,7 +77,6 @@ npm run --workspace examples/astro-showcase dev
 | `examples/*` | Runnable demo sites, which the test suite drives        |
 | `tests/`     | The shared end-to-end runner and the Storage emulator   |
 | `docs/`      | How to write and release an adapter                     |
-| `plans/`     | Design documents for work that is not done yet          |
 
 ## Contributing
 
