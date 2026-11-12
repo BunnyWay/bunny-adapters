@@ -33,7 +33,7 @@
     "release": "npm run build && changeset publish"
   },
   "devDependencies": {
-    "@astrojs/svelte": "^9.0.1",
+    "@astrojs/svelte": "^9.1.2",
     "@changesets/changelog-github": "^1.0.0",
     "@changesets/cli": "^3.0.1",
     "prettier": "^3.6.0",
